@@ -3,7 +3,7 @@
 % returns: discrete state transition matrix, discrete control matrix, and discrete process noise matrix, given the gradient of f(x,u) w.r.t x
 % This function essentially gives you the process model parameter matrices required for the EKF
 function varargout = discretize_nl_sys(JacA, G, Q, dt, order, with_Gamk, with_Wk)
-    % for x' = f(x,u) + gamma*w_k = g(x) + B_u * u + gamma * w_k, jacobian does 
+    % assumption: term multiplying input u, B_u, does not 
     if nargin < 6
         with_Gamk = true;
     end

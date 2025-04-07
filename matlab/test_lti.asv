@@ -11,8 +11,6 @@ addpath("mex_files");
 
 test_lti_motor();
 
-
-
 function [xs, xs_kf, xs_cf] = test_lti_motor()
     % rotor configuration
     B = 0; % motor damping
@@ -41,14 +39,14 @@ function [xs, xs_kf, xs_cf] = test_lti_motor()
     B = disc_sys.B;
     H = disc_sys.C;
     W = 0.01;
-    V = 0.009311^2;
+    V = 0.02;
 
-    num_propagations = 200;
+    num_propagations = 50;
 
+    % simulate Cauchy system first
     x0_kf = zeros(size(Phi,1), 1);
     P0_kf = eye(size(Phi,2)) * 0.05;
 
-    % Cauchy parameters
     scale_g2c = 1.0 / 1.3898; % Scale the Gaussian's standard deviation
     beta = sqrt(W(1,1)) * scale_g2c; % Process noise scale parameter for the Cauchy Estimator
     gamma = sqrt(V(1,1)) * scale_g2c; % Measurement noise scale parameter for the Cauchy Estimator
@@ -59,12 +57,12 @@ function [xs, xs_kf, xs_cf] = test_lti_motor()
     steps = num_propagations + 1;
     debug_print = false;
 
-%     x0_truth = mvnrnd(x0_kf, P0_kf, 1)';
+    x0_truth = mvnrnd(x0_kf, P0_kf, 1)';
     theta0 = unifrnd(-pi/200,pi/200)';
 
     us = 0.5*ones(1,num_propagations); % keep the motor spinning; dimensions 1xn
 
-    [xs, zs, ws, vs] = simulate_mixed_ltiv_system(num_propagations, theta0, us', Phi, B, Gamma, W, H, V, dt);
+    [xs, zs, ws, vs] = simulate_mixed_ltiv_system(num_propagations, x0_truth, us', Phi, B, Gamma, W, H, V, dt);
     
     xs_kf = zeros(1,steps);
     % run KF as a point of comparison
@@ -83,24 +81,20 @@ function [xs, xs_kf, xs_cf] = test_lti_motor()
         uk = us(k);
         zk = zs(k);
         xs(k,:)
-        [xk_pred, Pk] = cauchyEst.step(zk, uk); % Call the step function with the current measurement
+        [xk_pred, Pk] = cauchyEst.step(zk, uk) % Call the step function with the current measurement
         xs_cf(k) = xk_pred;
     end
     cauchyEst.shutdown();
     start = 6;
     figure()
     hold on
-    plot((dt*(start:num_propagations))', xs_cf(start:end));
-    plot((dt*(start:num_propagations))', xs_kf(start:end)');
-    plot((dt*(start:num_propagations))', xs(start+1:end)');
+    plot((dt*(start:num_propagations))', xs_cf(start:end), xs_kf(start:end)', xs(start+1:end)')
+    plot((dt*(start:num_propagations))', )
     hold off
     legend("Cauchy","KF","True")
     title("Estimates")
     figure()
-    hold on
-    plot(dt*(start:num_propagations)', abs(xs_cf(start:end)'-xs(start+1:end)));
-    plot(dt*(start:num_propagations)', abs(xs_kf(start:end)-xs(start+1:end)));
-    hold off
+    plot((dt*start:num_propagations)', abs(xs_cf(start:end)-xs(start+1:end)), abs(xs_kf(start:end)-xs(start+1:end)))
     legend("Cauchy","KF")
     title("Errors")
 end

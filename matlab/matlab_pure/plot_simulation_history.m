@@ -117,6 +117,20 @@ function plot_simulation_history(cauchy_moment_info, simulation_history, kf_hist
         hold off;
     end
 
+    % Plot the errors on top of one another
+    if with_ce && with_kf
+        figure;
+        sgtitle('KF State Error (r) vs CF State Error (b)');
+        for i = 1:n
+            subplot(n,1,i)
+            hold on
+            plot(T(cd+1:plot_len), true_states(cd+1:plot_len,i) - means(:,i), 'b');
+            plot(T(1:plot_len), true_states(1:plot_len,i) - kf_cond_means(1:plot_len,i), 'r');
+            hold off
+        end
+    end
+        
+
     % Plot the measurements, and the measurement and process noise
     if with_sim
         line_types = {'-', '--', '-.', ':', '-', '--', '-.', ':'};

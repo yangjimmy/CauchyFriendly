@@ -70,6 +70,7 @@ classdef MCauchyEstimator < handle
 
         
         function n = init_params_checker(obj, A0, p0, b0)
+            % verifies initial parameter value dimensions
             assert(size(A0, 1) == size(A0, 2), 'A0 must be a square matrix.');
             assert(size(A0, 1) == length(p0), 'Dimension mismatch between A0 and p0.');
             assert(size(A0, 1) == length(b0), 'Dimension mismatch between A0 and b0.');
@@ -81,6 +82,7 @@ classdef MCauchyEstimator < handle
 
 
         function ndim_input_checker(obj, A0, p0, b0, Phi, B, Gamma, beta, H, gamma)
+            % verifies system matrix dimensions
             n = obj.init_params_checker(A0, p0, b0);
             
             assert(size(Phi, 1) == size(Phi, 2) && size(Phi, 1) == n, 'Phi must be a square matrix and match dimensions with A0.');
