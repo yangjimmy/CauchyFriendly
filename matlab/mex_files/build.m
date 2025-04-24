@@ -6,9 +6,11 @@ setenv('CFLAGS', '-fno-omit-frame-pointer -fsanitize=address');
 setenv('LDFLAGS', '-fsanitize=protect-initialized-data -fsanitize=leak -fsanitize=address');
 
 % The following two lines are specific to Nishad's computer. Please change depending on your own locations
-includePath = '-I"C:\Users\jimmy\Documents\GitHub\CauchyFriendly\scripts\swig\cauchy" -I"C:\Users\jimmy\Documents\GitHub\CauchyFriendly\include"';
-libraryPath = '-L"C:\Users\jimmy\Documents\GitHub\CauchyFriendly\scripts\windows\pthread-win\Pre-built.2\lib\x64" pthreadVC2.lib';
-
+% includePath = '-I"C:\Users\jimmy\Documents\GitHub\CauchyFriendly\scripts\swig\cauchy" -I"C:\Users\jimmy\Documents\GitHub\CauchyFriendly\include"';
+% libraryPath = '-L"C:\Users\jimmy\Documents\GitHub\CauchyFriendly\scripts\windows\pthread-win\Pre-built.2\lib\x64" pthreadVC2.lib';
+includePath = '-I"D:\UCLA\Research\CauchyFilter\Code\CauchyFriendly\scripts\swig\cauchy" -I"D:\UCLA\Research\CauchyFilter\Code\CauchyFriendly\include"';
+libraryPath = '-L"D:\UCLA\Research\CauchyFilter\Code\CauchyFriendly\scripts\windows\pthread-win\Pre-built.2\lib\x64" pthreadVC2.lib';
+% D:\UCLA\Research\CauchyFilter\Code\CauchyFriendly\matlab
 
 eval(['mex -g ', includePath, ' ', libraryPath, ' ../matlab_wrapped/mcauchy_initialize_lti.cpp']);
 eval(['mex -g ', includePath, ' ', libraryPath, ' ../matlab_wrapped/mcauchy_step.cpp']);

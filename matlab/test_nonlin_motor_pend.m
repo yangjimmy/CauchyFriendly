@@ -12,19 +12,20 @@ addpath(pwd);
 % pendulum configuration
 mp = struct(...
     'g', 9.81, ... % gravitational constant
-    'B', 0, ... % motor damping
+    'B', 8.1055e-6, ... % motor damping
     'L', 0.23e-3, ... % inductance
     'R', 3.85, ... % resistance
     'V_s', 10.7, ... % supply voltage
-    'K_m', 0.24, ... % motor constant
-    'm', 0.044, ... % mass of rod
-    'l_c', 0.077, ... % length of rod
+    'K_m', 0.0228, ... % motor constant
+    'm', 0.03937, ... % mass of rod
+    'l_c', 0.0254, ... % length of rod
     'J_motor', 1.67e-6, ...
-    'sr', 100, ... % sampling rate (Hz)
+    'J_rod', 2.12*1E-5, ...
+    'sr', 1000, ... % sampling rate (Hz) % 100
     'w_PSD', 0.01 ... % process noise Power spectral density
 );
-mp.J_rod = 1/3*mp.m*mp.l_c^2; % pendulum config; 1/12*m*l_c^2 for pendulum config
-mp.J = mp.J_motor + mp.J_rod;
+% mp.J_rod = 1/12*mp.m; % *mp.l_c^2; % pendulum config; 1/12*m*l_c^2 for pendulum config
+mp.J = mp.J_motor + mp.J_rod + mp.m * mp.l_c^2;
 mp.dt = 1/mp.sr;
 
 %% Bode Transfer Function
@@ -35,10 +36,13 @@ bode(basic_tf);
 % TODO: pendulum colliding with wall
 
 %% Generate a trajectory
-theta_vec0 = [pi/4; 0]; % initial angle of 45 degrees at 0 radians/sec
+theta_vec0 = [pi/2; 0]; % initial angle of 45 degrees at 0 radians/sec
 theta_k = theta_vec0;
 thetas = theta_k';
-propagations = 160;
+% propagations = 160;
+propagations = 4000;
+
+
 for k = 1:propagations
     theta_k = nonlin_transition_model(theta_k);
     thetas = [thetas; theta_k'];
@@ -62,7 +66,8 @@ xs = xk'; % State vector history
 ws = [];   % Process noise history
 vs = unifrnd(-pi/200,pi/200); % Measurement noise history; sample from uniform distribution
 zs = H * xk + vs(1); % Measurement history
-propagations = 160;
+% propagations = 160;
+
 for k = 1:propagations
     wk = mp.dt * sqrt(mp.w_PSD) * randn();
     xk(2) = xk(2) + wk; % Gamma = [0; 1];
@@ -141,7 +146,8 @@ print_debug = false;
 % Sliding window
 swm_print_debug = false; 
 win_print_debug = false;
-num_windows = 8;
+% num_windows = 8;
+num_windows = 4;
 % 
 cauchyEst = MSlidingWindowManager("nonlin", num_windows, swm_print_debug, win_print_debug);
 cauchyEst.initialize_nonlin(x0_ce, A0, p0, b0, beta, gamma, 'dynamics_update', 'nonlinear_msmt_model', 'msmt_model_jacobian', num_controls, mp.dt);
@@ -169,4 +175,25 @@ plot_simulation_history(cauchyEst.moment_info, {xs,zs,ws,vs}, {xs_kf, Ps_kf} )
 % 
 % end
 
+figure;
+ax(1) = subplot(2,1,1);
+plot(Ts, xs_kf(:,1)); hold on;
+plot(Ts, cauchyEst.moment_info.x(:,1)); hold on;
+plot(Ts, xs(:,1),'k--'); hold on;
+legend('Kalman','Cauchy','Sim','Orientation','horizontal');
+title('Position','Interpreter','latex');
+xlabel('Time [s]','Interpreter','latex');
+ylabel('Position [rad]','Interpreter','latex');
+grid on; % grid minor;
 
+ax(2) = subplot(2,1,2);
+plot(Ts, xs_kf(:,2)); hold on;
+plot(Ts, cauchyEst.moment_info.x(:,2)); hold on;
+plot(Ts, xs(:,2),'k--'); hold on;
+legend('Kalman','Cauchy','Sim');
+title('Velocity','Interpreter','latex');
+xlabel('Time [s]','Interpreter','latex');
+ylabel('Velocity [rad/s]','Interpreter','latex');
+grid on; % grid minor;
+
+linkaxes(ax,'x');
