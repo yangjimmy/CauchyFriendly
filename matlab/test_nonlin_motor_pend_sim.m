@@ -8,34 +8,19 @@ addpath("mex_files");
 addpath(pwd);
 
 %% Path of the data
-dataPath = '.\data\pendulum_wall_0414_01_pos.mat';
-dataPath = '.\data\pendulum_wall_0414_03_pos.mat';
+% dataPath = '.\data\pendulum_wall_0414_01_pos.mat';
+% dataPath = '.\data\pendulum_wall_0414_03_pos.mat';
 % dataPath = '.\data\pendulum_0415_04_pos.mat';
-dataPath = '.\data\pendulum_wall_0424_05_pos.mat';
+dataPath = '.\data\pendulum_wall_simu_noise.mat';
 
-data = load(dataPath);
+load(dataPath);
 
 
-%%
-
-% pendulum configuration
-mp = struct(...
-    'g', 9.81, ... % gravitational constant
-    'B', 8.1055e-6, ... % motor damping
-    'L', 0.23e-3, ... % inductance
-    'R', 3.85, ... % resistance
-    'V_s', 10.7, ... % supply voltage
-    'K_m', 0.0228, ... % motor constant
-    'm', 0.03937, ... % mass of rod
-    'l_c', 0.0254, ... % length of rod
-    'J_motor', 1.67e-6, ...
-    'J_rod', 2.12*1E-5, ...
-    'sr', 1000, ... % sampling rate (Hz) % 100
-    'w_PSD', 0.01 ... % process noise Power spectral density
-);
-% mp.J_rod = 1/12*mp.m; % *mp.l_c^2; % pendulum config; 1/12*m*l_c^2 for pendulum config
-mp.J = mp.J_motor + mp.J_rod + mp.m * mp.l_c^2;
-mp.dt = 1/mp.sr;
+%% Call pendulum parameter
+% generate a `mp` file logging all pendulum parameters
+if ~exist('mp','var')
+    pendulum_DataFile
+end
 
 %% Bode Transfer Function
 s = tf('s');
@@ -67,7 +52,8 @@ propagations = length(data.t) - 1;
 
 %% Generate trajectory with noise
 % Creating the dynamic simulation
-V = 0.009311^2; % best fit Gaussian
+% V = 0.009311^2; % best fit Gaussian
+V = mp.Enc_n^2/2;
 
 H = [1.0, 0.0]; % meausrement model
 xk = theta_vec0;
@@ -95,7 +81,8 @@ vs = unifrnd(-pi/200,pi/200); % Measurement noise history; sample from uniform d
 % vs = zeros(size(data1.t));
 
 Ts = data.t;
-zs = data.pos;
+% zs = data.pos;
+zs = data.pos_m;
 xs = [data.pos, data.vel];
 
 %% Kalman Filter
@@ -222,6 +209,14 @@ linkaxes(ax,'x');
 % plot_simulation_history(cauchyEst.moment_info, {}, {xs_kf, Ps_kf} )
 
 
+cauchy_pos_e = cauchyEst.moment_info.x(:,1) - xs(:,1);
+cauchy_vel_e = cauchyEst.moment_info.x(:,2) - xs(:,2);
+kalman_pos_e = xs_kf(:,1) - xs(:,1);
+kalman_vel_e = xs_kf(:,2) - xs(:,2);
+
+
+%%
+
 figure;
 for idx = 1:2
     ax(idx) = subplot(2,1,idx);
@@ -236,9 +231,41 @@ end
 linkaxes(ax,'x');
 
 %%
+figure;
+for idx = 1:2
+    % ax(idx) = subplot(2,1,idx);
+    ax(idx) = nexttile;
+    set(gca,'ColorOrderIndex',1)
+
+    yyaxis left;
+    plot(Ts, xs_kf(:,idx) - data.pos); hold on;
+    plot(Ts, cauchyEst.moment_info.x(:,idx) - data.pos); hold on;
+    yl_right = ylim;
+    ylim([-max(abs(yl_right)), max(abs(yl_right))]);
+
+    yyaxis right;
+    plot(Ts, sqrt(cauchyEst.moment_info.P(:,idx,idx)),'r'); hold on;
+    plot(Ts,-sqrt(cauchyEst.moment_info.P(:,idx,idx)),'r'); hold on;
+    plot(Ts, sqrt(Ps_kf(:,idx,idx)),'m'); hold on;
+    plot(Ts,-sqrt(Ps_kf(:,idx,idx)),'m'); hold on;
+    title('Simulated error','Interpreter','latex');
+    % legend('Cauchy 1-Sig bound','','Kalman 1-Sig bound','','interpreter','latex');
+    grid on; % grid minor;
+    
+
+    if idx == 1
+        legend('Kalman','Cauchy','Cauchy 1-Sig bound','','Kalman 1-Sig bound','', ...
+            'Location','northoutside','Orientation','horizontal','NumColumns',2);
+    end
+end
+linkaxes(ax,'x');
+
+%%
 clear ax;
 figure;
-factorList = [15,40];
+factorList = [15,20];
+factorList = [1,1];
+
 for idx = 1:2
     ax(idx) = nexttile;
     factor = factorList(idx);
@@ -273,5 +300,4 @@ for idx = 1:2
 end
 sgtitle(sprintf('std magnified by %g and %g times',factorList));
 linkaxes(ax,'x');
-
 
