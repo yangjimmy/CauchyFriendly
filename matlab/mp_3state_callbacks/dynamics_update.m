@@ -1,11 +1,11 @@
 function dynamics_update(c_duc)
     global mp;
-    Gamma_c = [0.0; 1.0];
+    Gamma_c = [0.0; 1.0; 0.0];
     taylor_order = 2;
     mduc = M_CauchyDynamicsUpdateContainer(c_duc);
     %% Propagate x 
     xk = mduc.cget_x();
-    xbar = nonlin_transition_model(xk); % propagate from k -> k+1
+    xbar = nonlin_transition_model_2(xk); % propagate from k -> k+1
     mduc.cset_x(xbar);
     mduc.cset_is_xbar_set_for_ece(); % need to call this!
     %% Phi, Gamma, beta may update

@@ -53,7 +53,7 @@ mp.dt = 1/mp.sr;
 %% Generate a trajectory
 mp.sr = 10000;
 mp.dt = 1/mp.sr; % change runge kutta step size for stability purposes
-propagations = 40000; % change num propagations accordingly
+propagations = 3000; % change num propagations accordingly
 
 theta_vec0 = [pi/2; 0; 0]; % initial angle of 45 degrees at 0 radians/sec
 theta_k = theta_vec0;
@@ -103,14 +103,14 @@ plot_simulation_history([], {xs,zs,ws,vs}, [])
 
 %% Kalman Filter
 % Continuous time Gamma (\Gamma_c)
-Gamma_c = [0.0; 1.0; 0];
+Gamma_c = [0.0; 1.0; 0.0];
 W_c = mp.w_PSD;
 I3 = eye(3);
-taylor_order = 2;
+taylor_order = 3;
 
 % Setting up and running the EKF
 % The gaussian_filters module has a "run_ekf" function baked in, but we'll just show the whole thing here
-P0_kf = eye(3) * 0.003;
+P0_kf = eye(3) * 0.001;
 x0_kf = mvnrnd(theta_vec0, P0_kf); % lets initialize the Kalman filter slightly off from the true state position
 
 xs_kf = x0_kf;
@@ -165,14 +165,14 @@ print_debug = false;
 
 % Sliding window
 swm_print_debug = false; 
-win_print_debug = false;
+win_print_debug = true;
 % num_windows = 8;
 num_windows = 4;
 % 
 cauchyEst = MSlidingWindowManager("nonlin", num_windows, swm_print_debug, win_print_debug);
 cauchyEst.initialize_nonlin(x0_ce, A0, p0, b0, beta, gamma, 'dynamics_update', 'nonlinear_msmt_model', 'msmt_model_jacobian', num_controls, mp.dt);
 % charACTERIZE the rate
-for k = 1:length(zs)
+for k = 1:5
     zk = zs(k);
     [xhat, Phat, wavg_xhat, wavg_Phat] = cauchyEst.step(zk, []);
 end
