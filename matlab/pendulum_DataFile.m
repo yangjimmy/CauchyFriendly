@@ -15,7 +15,7 @@ mp = struct(...
     'J_motor', 1.67e-6, ...
     'J_rod', 2.12*1E-5, ...
     'sr', 1000, ... % sampling rate (Hz) % 100
-    'w_PSD', 0., ... % process noise Power spectral density
+    'w_PSD', 0.01, ... % process noise Power spectral density
     'EncRes', 400 ... % encoder resolution per revolution
 );
 % mp.J_rod = 1/12*mp.m; % *mp.l_c^2; % pendulum config; 1/12*m*l_c^2 for pendulum config
@@ -23,3 +23,6 @@ mp.J = mp.J_motor + mp.J_rod + mp.m * mp.l_c^2;
 mp.dt = 1/mp.sr;
 mp.Enc_n = 2 * pi / mp.EncRes; % encoder noise (uniform distributed noise)
 mp.VelRes = mp.EncRes / mp.dt;
+% PSD setting
+mp.v_PSD = mp.Enc_n^2 /12 / mp.dt;
+mp.w_PSD = mp.w_PSD / mp.dt;

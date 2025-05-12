@@ -1,32 +1,16 @@
-clear
-clc
-close all
+clc; clear; close all;
 
-global mp
+% global mp
 rmpath("nl_tut_callbacks")
 addpath("matlab_pure");
 addpath("mp_3state_callbacks");
 addpath("mex_files");
 addpath(pwd);
-
-% pendulum configuration
-mp = struct(...
-    'g', 9.81, ... % gravitational constant
-    'B', 8.1055e-6, ... % motor damping
-    'L', 0.23e-3, ... % inductance
-    'R', 3.85, ... % resistance
-    'V_s', 10.7, ... % supply voltage
-    'K_m', 0.0228, ... % motor constant
-    'm', 0.03937, ... % mass of rod
-    'l_c', 0.0254, ... % length of rod
-    'J_motor', 1.67e-6, ...
-    'J_rod', 2.12*1E-5, ...
-    'sr', 1000, ... % sampling rate (Hz) % 100
-    'w_PSD', 0.01 ... % process noise Power spectral density
-);
-% mp.J_rod = 1/12*mp.m; % *mp.l_c^2; % pendulum config; 1/12*m*l_c^2 for pendulum config
-mp.J = mp.J_motor + mp.J_rod + mp.m * mp.l_c^2;
-mp.dt = 1/mp.sr;
+%% Call pendulum parameter
+% generate a `mp` file logging all pendulum parameters
+if ~exist('mp','var')
+    pendulum_DataFile
+end
 
 % %% Generate a trajectory
 % theta_vec0 = [pi/2; 0; 0]; % initial angle of 45 degrees at 0 radians/sec
@@ -51,9 +35,9 @@ mp.dt = 1/mp.sr;
 % % plot makes sense since back EMF prevents the motor from rotating 
 
 %% Generate a trajectory
-mp.sr = 10000;
-mp.dt = 1/mp.sr; % change runge kutta step size for stability purposes
-propagations = 3000; % change num propagations accordingly
+% mp.sr = 10000;
+% mp.dt = 1/mp.sr; % change runge kutta step size for stability purposes
+propagations = 40000; % change num propagations accordingly
 
 theta_vec0 = [pi/2; 0; 0]; % initial angle of 45 degrees at 0 radians/sec
 theta_k = theta_vec0;
@@ -79,7 +63,8 @@ plot(Ts, thetas(:,3));
 
 %% Generate trajectory with noise
 % Creating the dynamic simulation
-V = 0.009311^2; % best fit Gaussian
+% V = 0.009311^2; % best fit Gaussian
+V = mp.v_PSD;
 H = [1.0, 0.0, 0.0]; % meausrement model
 xk = theta_vec0;
 xs = xk'; % State vector history
@@ -165,20 +150,20 @@ print_debug = false;
 
 % Sliding window
 swm_print_debug = false; 
-win_print_debug = true;
+win_print_debug = false;
 % num_windows = 8;
 num_windows = 4;
 % 
 cauchyEst = MSlidingWindowManager("nonlin", num_windows, swm_print_debug, win_print_debug);
 cauchyEst.initialize_nonlin(x0_ce, A0, p0, b0, beta, gamma, 'dynamics_update', 'nonlinear_msmt_model', 'msmt_model_jacobian', num_controls, mp.dt);
 % charACTERIZE the rate
-for k = 1:5
+for k = 1:length(zs)
     zk = zs(k);
     [xhat, Phat, wavg_xhat, wavg_Phat] = cauchyEst.step(zk, []);
 end
 cauchyEst.shutdown()
 
-plot_simulation_history(cauchyEst.moment_info, {xs,zs,ws,vs}, {xs_kf, Ps_kf} )
+% plot_simulation_history(cauchyEst.moment_info, {xs,zs,ws,vs}, {xs_kf, Ps_kf} )
 
 
 
@@ -195,25 +180,167 @@ plot_simulation_history(cauchyEst.moment_info, {xs,zs,ws,vs}, {xs_kf, Ps_kf} )
 % 
 % end
 
-figure;
-ax(1) = subplot(2,1,1);
-plot(Ts, xs_kf(:,1)); hold on;
-plot(Ts, cauchyEst.moment_info.x(:,1)); hold on;
-plot(Ts, xs(:,1),'k--'); hold on;
-legend('Kalman','Cauchy','Sim','Orientation','horizontal');
-title('Position','Interpreter','latex');
-xlabel('Time [s]','Interpreter','latex');
-ylabel('Position [rad]','Interpreter','latex');
-grid on; % grid minor;
+% figure;
+% ax(1) = subplot(2,1,1);
+% plot(Ts, xs_kf(:,1)); hold on;
+% plot(Ts, cauchyEst.moment_info.x(:,1)); hold on;
+% plot(Ts, xs(:,1),'k--'); hold on;
+% legend('Kalman','Cauchy','Sim','Orientation','horizontal');
+% title('Position','Interpreter','latex');
+% xlabel('Time [s]','Interpreter','latex');
+% ylabel('Position [rad]','Interpreter','latex');
+% grid on; % grid minor;
+% 
+% ax(2) = subplot(2,1,2);
+% plot(Ts, xs_kf(:,2)); hold on;
+% plot(Ts, cauchyEst.moment_info.x(:,2)); hold on;
+% plot(Ts, xs(:,2),'k--'); hold on;
+% legend('Kalman','Cauchy','Sim');
+% title('Velocity','Interpreter','latex');
+% xlabel('Time [s]','Interpreter','latex');
+% ylabel('Velocity [rad/s]','Interpreter','latex');
+% grid on; % grid minor;
+% 
+% linkaxes(ax,'x');
 
-ax(2) = subplot(2,1,2);
-plot(Ts, xs_kf(:,2)); hold on;
-plot(Ts, cauchyEst.moment_info.x(:,2)); hold on;
-plot(Ts, xs(:,2),'k--'); hold on;
-legend('Kalman','Cauchy','Sim');
-title('Velocity','Interpreter','latex');
-xlabel('Time [s]','Interpreter','latex');
-ylabel('Velocity [rad/s]','Interpreter','latex');
-grid on; % grid minor;
+
+
+%%
+clear ax;
+figure('Position',[200,200,1400,500]);
+tiledlayout(1,3,'TileSpacing','compact')
+% ax(1) = subplot(2,1,1);
+ax(1) = nexttile;
+idx = 1;
+kf_e = xs_kf(:,idx) - xs(:,1);
+c_e = cauchyEst.moment_info.x(:,idx) - xs(:,1);
+kf_std = sqrt(Ps_kf(:,idx,idx));
+c_std = sqrt(cauchyEst.moment_info.P(:,idx,idx));
+
+plot(Ts, kf_e); hold on;
+plot(Ts, c_e); hold on;
+plot(Ts,  c_std,'g'); hold on;
+plot(Ts, -c_std,'g'); hold on;
+plot(Ts,  kf_std,'b'); hold on;
+plot(Ts, -kf_std,'b'); hold on;
+% title('Simulated error','Interpreter','latex');
+grid on; 
+% xlim([0.18,0.4]);   % 1
+% xlim([.18,.25]);    % 2
+% ylim([-.06,.02]);   % 2
+% xlim([3.5,3.9]);  % 3
+
+% ylim([-max(abs(kf_e)),max(abs(kf_e))]);
+ylabel('Position [rad]','Interpreter','latex','FontSize',14);
+xlabel('Time [s]','Interpreter','latex','FontSize',14);
+legend('Kalman error','Cauchy error','Cauchy 1-Sig bound','','Kalman 1-Sig bound','', ...
+    'Interpreter','latex','Location','southeast','FontSize',12);
+
+% ax(2) = subplot(2,1,2);
+ax(2) = nexttile;
+idx = 2;
+kf_e = xs_kf(:,idx) - xs(:,2);
+c_e = cauchyEst.moment_info.x(:,idx) - xs(:,2);
+kf_std = sqrt(Ps_kf(:,idx,idx));
+c_std = sqrt(cauchyEst.moment_info.P(:,idx,idx));
+
+plot(Ts, kf_e); hold on;
+plot(Ts, c_e); hold on;
+plot(Ts,  c_std,'g'); hold on;
+plot(Ts, -c_std,'g'); hold on;
+plot(Ts,  kf_std,'b'); hold on;
+plot(Ts, -kf_std,'b'); hold on;
+% title('Simulated error','Interpreter','latex');
+grid on; 
+% xlim([.18,.4]);  % 1
+% xlim([.18,.25]);  % 2
+% ylim([-11,2]);    % 2
+% xlim([3.5,3.9]);  % 3
+
+ylabel('Velocity [rad/s]','Interpreter','latex','FontSize',14);
+xlabel('Time [s]','Interpreter','latex','FontSize',14);
+
+ax(3) = nexttile;
+idx = 3;
+kf_e = xs_kf(:,idx) - xs(:,idx);
+c_e = cauchyEst.moment_info.x(:,idx) - xs(:,idx);
+kf_std = sqrt(Ps_kf(:,idx,idx));
+c_std = sqrt(cauchyEst.moment_info.P(:,idx,idx));
+
+plot(Ts, kf_e); hold on;
+plot(Ts, c_e); hold on;
+plot(Ts,  c_std,'g'); hold on;
+plot(Ts, -c_std,'g'); hold on;
+plot(Ts,  kf_std,'b'); hold on;
+plot(Ts, -kf_std,'b'); hold on;
+% title('Simulated error','Interpreter','latex');
+grid on;
+ylim([-.06,.06]);
+% xlim([.18,.4]);  % 1
+% xlim([.18,.25]);  % 2
+% ylim([-11,2]);    % 2
+% xlim([3.5,3.9]);  % 3
+
+ylabel('Current [Amp]','Interpreter','latex','FontSize',14);
+xlabel('Time [s]','Interpreter','latex','FontSize',14);
+
+sgtitle('Error and 1-sigma bound - Simulation','Interpreter','latex');
 
 linkaxes(ax,'x');
+
+% exportgraphics(gcf,'.\fig\simulink_error_sigma_1.png','Resolution',600);
+% exportgraphics(gcf,'.\fig\simulink_cauchy_oscilation.png','Resolution',600);
+
+exportgraphics(gcf,'.\fig\simulation_error_sigma_1.png','Resolution',600);
+
+%%figure('Position',[200,200,1400,500]);
+clear ax;
+
+tiledlayout(1,3,"TileSpacing",'compact');
+% ax(1) = subplot(2,1,1);
+ax(1) = nexttile;
+plot(Ts, xs_kf(:,1)); hold on;
+plot(Ts, cauchyEst.moment_info.x(:,1),'linewidth',1.5); hold on;
+plot(Ts, xs(:,1),'k--'); hold on;
+legend('Kalman','Cauchy','Exp','Interpreter','latex','FontSize',12);
+% title('Position','Interpreter','latex');
+% xlabel('Time [s]','Interpreter','latex');
+xlabel('Time [s]','Interpreter','latex','FontSize',14);
+ylabel('Position [rad]','Interpreter','latex','FontSize',14);
+grid on; axis tight;
+xlim([0,1.5]);
+
+% ax(2) = subplot(2,1,2);
+ax(2) = nexttile;
+plot(Ts, xs_kf(:,2)); hold on;
+plot(Ts, cauchyEst.moment_info.x(:,2),'linewidth',1.5); hold on;
+plot(Ts, xs(:,2),'k--'); hold on;
+% title('Velocity','Interpreter','latex');
+xlabel('Time [s]','Interpreter','latex','FontSize',14);
+ylabel('Velocity [rad/s]','Interpreter','latex','FontSize',14);
+grid on; axis tight;
+xlim([0,1.5]);
+
+ax(3) = nexttile;
+plot(Ts, xs_kf(:,3)); hold on;
+plot(Ts, cauchyEst.moment_info.x(:,3),'linewidth',1.5); hold on;
+plot(Ts, xs(:,3),'k--'); hold on;
+% title('Velocity','Interpreter','latex');
+xlabel('Time [s]','Interpreter','latex','FontSize',14);
+ylabel('Current [Amp]','Interpreter','latex','FontSize',14);
+grid on; axis tight;
+xlim([0,1.5]);
+
+linkaxes(ax,'x');
+
+exportgraphics(gcf,'.\fig\simulation_states.png','Resolution',600);
+
+%%
+data.t = Ts;
+data.pos = xs(:,1);
+data.vel = xs(:,2);
+data.cur = xs(:,3);
+
+save('.\data\pendulum_free_simu_3.mat','data');
+
+

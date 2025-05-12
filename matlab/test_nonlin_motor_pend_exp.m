@@ -1,6 +1,6 @@
 clear; clc; close all;
 
-global mp
+% global mp
 rmpath("nl_tut_callbacks")
 addpath("matlab_pure");
 addpath("mp_callbacks");
@@ -17,25 +17,11 @@ data = load(dataPath);
 
 
 %%
-
-% pendulum configuration
-mp = struct(...
-    'g', 9.81, ... % gravitational constant
-    'B', 8.1055e-6, ... % motor damping
-    'L', 0.23e-3, ... % inductance
-    'R', 3.85, ... % resistance
-    'V_s', 10.7, ... % supply voltage
-    'K_m', 0.0228, ... % motor constant
-    'm', 0.03937, ... % mass of rod
-    'l_c', 0.0254, ... % length of rod
-    'J_motor', 1.67e-6, ...
-    'J_rod', 2.12*1E-5, ...
-    'sr', 1000, ... % sampling rate (Hz) % 100
-    'w_PSD', 0.01 ... % process noise Power spectral density
-);
-% mp.J_rod = 1/12*mp.m; % *mp.l_c^2; % pendulum config; 1/12*m*l_c^2 for pendulum config
-mp.J = mp.J_motor + mp.J_rod + mp.m * mp.l_c^2;
-mp.dt = 1/mp.sr;
+%% Call pendulum parameter
+% generate a `mp` file logging all pendulum parameters
+if ~exist('mp','var')
+    pendulum_DataFile
+end
 
 %% Bode Transfer Function
 s = tf('s');
@@ -67,7 +53,9 @@ propagations = length(data.t) - 1;
 
 %% Generate trajectory with noise
 % Creating the dynamic simulation
-V = 0.009311^2; % best fit Gaussian
+% V = 0.009311^2; % best fit Gaussian
+% V = mp.Enc_n^2/3 * sqrt(mp.dt);
+V = mp.v_PSD;
 
 H = [1.0, 0.0]; % meausrement model
 xk = theta_vec0;
@@ -137,7 +125,7 @@ end
 
 %% Cauchy
 scale_g2c = 1.0 / 1.3898; % scale factor to fit the cauchy to the gaussian
-beta = sqrt(mp.w_PSD / mp.dt) * scale_g2c / 50;
+beta = sqrt(mp.w_PSD / mp.dt) * scale_g2c;
 gamma = sqrt(V(1, 1)) * scale_g2c;
 x0_ce = x0_kf;
 A0 = eye(2);
@@ -193,28 +181,7 @@ cauchyEst.shutdown()
 
 
 
-figure;
-ax(1) = subplot(2,1,1);
-plot(Ts, xs_kf(:,1)); hold on;
-plot(Ts, cauchyEst.moment_info.x(:,1),'linewidth',1.5); hold on;
-plot(Ts, data.pos,'k--'); hold on;
-legend('Kalman','Cauchy','Exp');
-title('Position','Interpreter','latex');
-xlabel('Time [s]','Interpreter','latex');
-ylabel('Position [rad]','Interpreter','latex');
-grid on; % grid minor;
 
-ax(2) = subplot(2,1,2);
-plot(Ts, xs_kf(:,2)); hold on;
-plot(Ts, cauchyEst.moment_info.x(:,2),'linewidth',1.5); hold on;
-plot(Ts, data.vel,'k--'); hold on;
-legend('Kalman','Cauchy','Exp');
-title('Velocity','Interpreter','latex');
-xlabel('Time [s]','Interpreter','latex');
-ylabel('Velocity [rad/s]','Interpreter','latex');
-grid on; % grid minor;
-
-linkaxes(ax,'x');
 
 
 
@@ -237,41 +204,94 @@ linkaxes(ax,'x');
 
 %%
 clear ax;
-figure;
-factorList = [15,40];
-for idx = 1:2
-    ax(idx) = nexttile;
-    factor = factorList(idx);
-    
-    if idx == 1
-        kf_e = xs_kf(:,idx) - data.pos;
-        c_e = cauchyEst.moment_info.x(:,idx) - data.pos;
-    else
-        kf_e = xs_kf(:,idx) - data.vel;
-        c_e = cauchyEst.moment_info.x(:,idx) - data.vel;
-    end
-    kf_std = sqrt(Ps_kf(:,idx,idx));
-    c_std = sqrt(cauchyEst.moment_info.P(:,idx,idx));
-    
-    plot(Ts, kf_e); hold on;
-    plot(Ts, c_e); hold on;
-    plot(Ts, factor * c_std,'r'); hold on;
-    plot(Ts,-factor * c_std,'r'); hold on;
-    plot(Ts, factor * kf_std,'m'); hold on;
-    plot(Ts,-factor * kf_std,'m'); hold on;
-    title('Simulated error','Interpreter','latex');
-    grid on; % grid minor;
-    % yl_right = ylim;
-    % ylim([-max(abs(yl_right)), max(abs(yl_right))]);
-    xlim([0,0.7]);
-    ylim([-max(abs(kf_e)),max(abs(kf_e))]);
+figure('Position',[200,200,1000,500]);
+tiledlayout(1,2,'TileSpacing','compact')
+% ax(1) = subplot(2,1,1);
+ax(1) = nexttile;
+idx = 1;
+kf_e = xs_kf(:,idx) - data.pos;
+c_e = cauchyEst.moment_info.x(:,idx) - data.pos;
+kf_std = sqrt(Ps_kf(:,idx,idx));
+c_std = sqrt(cauchyEst.moment_info.P(:,idx,idx));
 
-    if idx == 1
-        legend('Kalman error','Cauchy error','Cauchy 1-Sig bound','','Kalman 1-Sig bound','', ...
-            'Location','northoutside','Orientation','horizontal','NumColumns',2);
-    end
-end
-sgtitle(sprintf('std magnified by %g and %g times',factorList));
+plot(Ts, kf_e); hold on;
+plot(Ts, c_e); hold on;
+plot(Ts,  c_std,'r'); hold on;
+plot(Ts, -c_std,'r'); hold on;
+plot(Ts,  kf_std,'m'); hold on;
+plot(Ts, -kf_std,'m'); hold on;
+% title('Simulated error','Interpreter','latex');
+grid on; 
+xlim([0.18,0.4]);
+% xlim([.18,.25]);
+% ylim([-.06,.02]);
+
+% ylim([-max(abs(kf_e)),max(abs(kf_e))]);
+xlabel('Time [s]','Interpreter','latex','FontSize',14);
+ylabel('Position [rad]','Interpreter','latex','FontSize',14);
+legend('Kalman error','Cauchy error','Cauchy 1-Sig bound','','Kalman 1-Sig bound','', ...
+    'Interpreter','latex','Location','southeast','FontSize',12);
+
+% ax(2) = subplot(2,1,2);
+ax(2) = nexttile;
+idx = 2;
+kf_e = xs_kf(:,idx) - data.vel;
+c_e = cauchyEst.moment_info.x(:,idx) - data.vel;
+kf_std = sqrt(Ps_kf(:,idx,idx));
+c_std = sqrt(cauchyEst.moment_info.P(:,idx,idx));
+
+plot(Ts, kf_e); hold on;
+plot(Ts, c_e); hold on;
+plot(Ts,  c_std,'r'); hold on;
+plot(Ts, -c_std,'r'); hold on;
+plot(Ts,  kf_std,'m'); hold on;
+plot(Ts, -kf_std,'m'); hold on;
+% title('Simulated error','Interpreter','latex');
+grid on; 
+xlim([.18,.4]);
+% xlim([.18,.25]);
+% ylim([-11,2]);
+
+ylabel('Velocity [rad/s]','Interpreter','latex','FontSize',14);
+xlabel('Time [s]','Interpreter','latex','FontSize',14);
+
+
+sgtitle('Error and 1-sigma bound - Experiment','Interpreter','latex');
+
 linkaxes(ax,'x');
 
+% exportgraphics(gcf,'.\fig\exp_error_sigma_1.png','Resolution',600);
 
+
+
+%%
+clear ax;
+figure('Position',[200,200,1000,500]);
+tiledlayout(1,2,"TileSpacing",'compact');
+% ax(1) = subplot(2,1,1);
+ax(1) = nexttile;
+plot(Ts, xs_kf(:,1)); hold on;
+plot(Ts, cauchyEst.moment_info.x(:,1),'linewidth',1.5); hold on;
+plot(Ts, data.pos,'k--'); hold on;
+legend('Kalman','Cauchy','Exp','Interpreter','latex','FontSize',12);
+% title('Position','Interpreter','latex');
+% xlabel('Time [s]','Interpreter','latex');
+xlabel('Time [s]','Interpreter','latex','FontSize',14);
+ylabel('Position [rad]','Interpreter','latex','FontSize',14);
+grid on; axis tight;
+xlim([0,1.5]);
+
+% ax(2) = subplot(2,1,2);
+ax(2) = nexttile;
+plot(Ts, xs_kf(:,2)); hold on;
+plot(Ts, cauchyEst.moment_info.x(:,2),'linewidth',1.5); hold on;
+plot(Ts, data.vel,'k--'); hold on;
+% title('Velocity','Interpreter','latex');
+xlabel('Time [s]','Interpreter','latex','FontSize',14);
+ylabel('Velocity [rad/s]','Interpreter','latex','FontSize',14);
+grid on; axis tight;
+xlim([0,1.5]);
+
+linkaxes(ax,'x');
+
+% exportgraphics(gcf,'.\fig\exp_states.png','Resolution',600);
