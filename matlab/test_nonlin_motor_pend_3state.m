@@ -37,7 +37,7 @@ end
 %% Generate a trajectory
 % mp.sr = 10000;
 % mp.dt = 1/mp.sr; % change runge kutta step size for stability purposes
-propagations = 40000; % change num propagations accordingly
+propagations = 400; % change num propagations accordingly
 
 theta_vec0 = [pi/2; 0; 0]; % initial angle of 45 degrees at 0 radians/sec
 theta_k = theta_vec0;
@@ -45,10 +45,24 @@ thetas = theta_k';
 % propagations = 160;
 
 
-for k = 1:propagations
-    theta_k = nonlin_transition_model_2(theta_k);
-    thetas = [thetas; theta_k'];
-end
+% for k = 1:propagations
+%     theta_k = nonlin_transition_model_2(theta_k);
+%     thetas = [thetas; theta_k'];
+% end
+
+
+tspan = 0:mp.dt:mp.dt*(propagations);
+sol = ode45(@trajectory_propagate,[0, mp.dt*(propagations)],theta_vec0);
+thetas = deval(sol,tspan).';
+
+% function dx_dt = trajectory_propagate(t, x)
+%     global mp;
+%     dx_dt(1) = x(2);
+%     dx_dt(2) = (-mp.B*x(2)+mp.K_m*x(3)-mp.m*mp.g*mp.l_c*sin(x(1)))/mp.J; % currently u does not depend on x
+%     dx_dt(3) = (-mp.K_m*x(2)-mp.R*x(3))/mp.L;
+%     dx_dt = reshape(dx_dt,[3,1]);
+% end
+
 Ts = ((0:propagations) * mp.dt)';
 figure;
 sgtitle('Pendulum Trajectory (angle: top), (angular rate: bottom)');
@@ -67,23 +81,27 @@ plot(Ts, thetas(:,3));
 V = mp.v_PSD;
 H = [1.0, 0.0, 0.0]; % meausrement model
 xk = theta_vec0;
-xs = xk'; % State vector history
-ws = [];   % Process noise history
-vs = unifrnd(-pi/200,pi/200); % Measurement noise history; sample from uniform distribution
-zs = H * xk + vs(1); % Measurement history
+% xs = xk'; % State vector history
+% ws = [];   % Process noise history
+% vs = unifrnd(-pi/200,pi/200); % Measurement noise history; sample from uniform distribution
+% zs = H * xk + vs(1); % Measurement history
 % propagations = 160;
 
-for k = 1:propagations
-    wk = mp.dt * sqrt(mp.w_PSD) * randn();
-    xk(2) = xk(2) + wk; % Gamma = [0; 1];
-    xk = nonlin_transition_model_2(xk);
-    xs = [xs; xk'];
-    ws = [ws; wk];
-    vk = unifrnd(-pi/200,pi/200); % sample from uniform distribution
-    zk = H * xk + vk;
-    vs = [vs; vk];
-    zs = [zs; zk];
-end
+% for k = 1:propagations
+%     wk = mp.dt * sqrt(mp.w_PSD) * randn();
+%     xk(2) = xk(2) + wk; % Gamma = [0; 1];
+%     xk = nonlin_transition_model_2(xk);
+%     xs = [xs; xk'];
+%     ws = [ws; wk];
+%     vk = unifrnd(-pi/200,pi/200); % sample from uniform distribution
+%     zk = H * xk + vk;
+%     vs = [vs; vk];
+%     zs = [zs; zk];
+% end
+ws = mp.dt * sqrt(mp.w_PSD) * randn(propagations+1,1);
+xs = thetas + ws;
+vs = unifrnd(-pi/200,pi/200, propagations+1, 1);
+zs = xs * H.' + vs;
 plot_simulation_history([], {xs,zs,ws,vs}, [])
 
 %% Kalman Filter
@@ -108,7 +126,10 @@ for k = 1:propagations
     [Phi_k, W_k] = discretize_nl_sys(Jac_F, Gamma_c, W_c, mp.dt, taylor_order, false, true);
     % Propagate covariance and state estimates
     P_kf = Phi_k * P_kf * Phi_k' + W_k;
-    x_kf = nonlin_transition_model_2(x_kf);
+    % x_kf = nonlin_transition_model_2(x_kf);
+    [~,x_kf] = ode45(@trajectory_propagate,[0, mp.dt],x_kf);
+    x_kf = x_kf(end,:).';
+
     % Form Kalman Gain, update estimate and covariance
     K = (H * P_kf * H' + V) \ (H * P_kf)';
     zbar = H * x_kf;
@@ -118,6 +139,7 @@ for k = 1:propagations
     % Store estimates
     xs_kf = [xs_kf; x_kf'];
     Ps_kf(k, :, :) = P_kf;
+
 end
 
 % Plot Simulation results 
@@ -152,7 +174,7 @@ print_debug = false;
 swm_print_debug = false; 
 win_print_debug = false;
 % num_windows = 8;
-num_windows = 4;
+num_windows = 3;
 % 
 cauchyEst = MSlidingWindowManager("nonlin", num_windows, swm_print_debug, win_print_debug);
 cauchyEst.initialize_nonlin(x0_ce, A0, p0, b0, beta, gamma, 'dynamics_update', 'nonlinear_msmt_model', 'msmt_model_jacobian', num_controls, mp.dt);
@@ -163,7 +185,7 @@ for k = 1:length(zs)
 end
 cauchyEst.shutdown()
 
-% plot_simulation_history(cauchyEst.moment_info, {xs,zs,ws,vs}, {xs_kf, Ps_kf} )
+plot_simulation_history(cauchyEst.moment_info, {xs,zs,ws,vs}, {xs_kf, Ps_kf} )
 
 
 
