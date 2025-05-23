@@ -6,6 +6,8 @@ function dynamics_update(c_duc)
     %% Propagate x 
     xk = mduc.cget_x();
     xbar = nonlin_transition_model(xk); % propagate from k -> k+1
+    % [~,xbar] = ode45(@trajectory_propagate,[0, mp.dt],xk);
+    % xbar = xbar(end,:).';
     mduc.cset_x(xbar);
     mduc.cset_is_xbar_set_for_ece(); % need to call this!
     %% Phi, Gamma, beta may update

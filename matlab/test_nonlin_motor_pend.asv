@@ -1,6 +1,7 @@
 clear; clc; close all;
 
-% rmpath("nl_tut_callbacks")
+% global mp
+rmpath("nl_tut_callbacks")
 addpath("matlab_pure");
 addpath("mp_callbacks");
 addpath("mex_files");
@@ -12,14 +13,14 @@ if ~exist('mp','var')
     pendulum_DataFile
 end
 
-%% Bode Transfer Function
+% %% Bode Transfer Function
 % s = tf('s');
 % basic_tf = (mp.K_m*mp.V_s/(mp.J*mp.R))/(s^2+s*(mp.B/mp.J+mp.K_m^2/(mp.J*mp.R)));
 % bode(basic_tf);
 
 %% Simulation setup
 theta_vec0 = [pi/2; 0];     % initial angle of 90 degrees at 0 radians/sec
-sim_time = 4;               % s
+sim_time = 2;               % s
 propagations = sim_time / mp.dt;
 data_length = propagations + 1;
 num_state = 2;
@@ -34,7 +35,8 @@ Gamma_c = [0.0; 1.0];       % Continuous time Gamma (\Gamma_c)
 
 
 %% Generate a trajectory
-% theta_k = theta_vec0;
+theta_k = theta_vec0;
+
 % --- Generate trajectory with nonlinear transition model
 % thetas = zeros(num_state,propagations+1);
 % thetas(:,1) = theta_vec0;
@@ -57,12 +59,34 @@ plot(Ts, thetas(:, 1));
 subplot(2, 1, 2);
 plot(Ts, thetas(:, 2));
 
-%% Generate trajectory with noise in simulation
+%% Generate trajectory with noise
+% Creating the dynamic simulation
+% xk = theta_vec0;
+% xs = xk'; % State vector history
+% ws = [];   % Process noise history
+% vs = unifrnd(-pi/200,pi/200); % Measurement noise history; sample from uniform distribution
+% zs = H * xk + vs(1); % Measurement history
+% for k = 1:propagations
+%     wk = sqrt(W) * randn() * mp.dt;
+%     xk(2) = xk(2) + wk; % Gamma = [0; 1];
+%     % xk = nonlin_transition_model(xk);
+%     xk = 
+%     [~,xk] = ode45(@trajectory_propagate,[0, mp.dt],xk);
+%     xk = xk(end,:).';
+%     xs = [xs; xk'];
+%     ws = [ws; wk];
+%     vk = unifrnd(-pi/200,pi/200); % sample from uniform distribution
+%     zk = H * xk + vk;
+%     vs = [vs; vk];
+%     zs = [zs; zk];
+% end
+
+
 % Initialize vectors
 xs = zeros(num_state,data_length);
-zs = zeros(data_length,1);
+zs = zerso(data_length,1);
 
-% generate the process and sensor noise
+% precalculate the process and sensor noise
 ws = sqrt(W) * randn(data_length,1) * mp.dt;
 vs = unifrnd(-mp.Enc_n,mp.Enc_n,data_length,1);
 
@@ -72,69 +96,59 @@ zs(1) = H * xs(:,1) +vs(1);
 
 for k = 1:propagations
     wk = sqrt(W) * randn() * mp.dt;
-    xk = xs(:,k);
+    
     % xk = nonlin_transition_model(xk);
+    xk = 
     [~,xk] = ode45(@trajectory_propagate,[0, mp.dt],xk);
     xk = xk(end,:).';
-    % Dynamic equation: dx = Phi xdt + Gamma dw
-    xk = xk + Gamma_c * ws(k+1);
-    xs(:,k+1) = xk;
-    zs(k+1) = H * xk + vs(k+1);
+    xs = [xs; xk'];
+    ws = [ws; wk];
+    vk = unifrnd(-mp.Enc_n,mp.Enc_n); % sample from uniform distribution
+    zk = H * xk + vk;
+    vs = [vs; vk];
+    zs = [zs; zk];
 end
-xs = xs.';          % transpose xs so it's stacked row vectors
 
 plot_simulation_history([], {xs,zs,ws,vs}, [])
 
 %% Kalman Filter
-I2 = eye(2);            % 2x2 identity matrix
-taylor_order = 2;       % order of taylor expansion for transition matrix approx.
+I2 = eye(2);
+taylor_order = 2;
 
 % Setting up and running the EKF
 % The gaussian_filters module has a "run_ekf" function baked in, but we'll just show the whole thing here
-P0_kf = eye(2) * 0.003;             % Initial variance
-x0_kf = mvnrnd(theta_vec0, P0_kf);  % Initial mean
+P0_kf = eye(2) * 0.003;
+x0_kf = mvnrnd(theta_vec0, P0_kf); % lets initialize the Kalman filter slightly off from the true state position
 
-% initialize
-xs_kf = zeros(num_state,data_length);
-Ps_kf = zeros(data_length, 2, 2);
-
-% initial condition
-xs_kf(:,1) = x0_kf;
+xs_kf = x0_kf;
+Ps_kf = zeros(propagations+1, 2, 2);
 Ps_kf(1, :, :) = P0_kf;
-
-% propagation vectors
 x_kf = x0_kf';
 P_kf = P0_kf;
-
 for k = 1:propagations
-    % characterize nonlinear dynamics
     Jac_F = jacobian_mp_ode(x_kf);
     [Phi_k, W_k] = discretize_nl_sys(Jac_F, Gamma_c, W, mp.dt, taylor_order, false, true);
-
     % Propagate covariance and state estimates
     P_kf = Phi_k * P_kf * Phi_k' + W_k;
-    % x_kf = nonlin_transition_model(x_kf);
-    [~,x_kf] = ode45(@trajectory_propagate,[0, mp.dt],x_kf);
-    x_kf = x_kf(end,:).';
-
+    x_kf = nonlin_transition_model(x_kf);
+    % [~,x_kf] = ode45(@trajectory_propagate,[0, mp.dt],x_kf);
+    % x_kf = x_kf(end,:).';
     % Form Kalman Gain, update estimate and covariance
     K = (H * P_kf * H' + V) \ (H * P_kf)';
-    zbar = H * x_kf;            % estimated measurement
-    r = zs(k+1) - zbar;         % residue
-    x_kf = x_kf + K * r;        % updated state
-    P_kf = (I2 - K * H) * P_kf * (I2 - K * H)' + K * V * K';    % covariance update
-
+    zbar = H * x_kf;
+    r = zs(k+1) - zbar;
+    x_kf = x_kf + K * r;
+    P_kf = (I2 - K * H) * P_kf * (I2 - K * H)' + K * V * K';
     % Store estimates
-    xs_kf(:,k+1) = x_kf;
+    xs_kf = [xs_kf; x_kf'];
     Ps_kf(k, :, :) = P_kf;
 end
-xs_kf = xs_kf.';
 
 % Plot Simulation results 
 plot_simulation_history([], {xs,zs,ws,vs}, {xs_kf, Ps_kf});
 
 %% Cauchy
-scale_g2c = 1.0 / 1.3898;       % scale factor to fit the cauchy to the gaussian
+scale_g2c = 1.0 / 1.3898; % scale factor to fit the cauchy to the gaussian
 beta = sqrt(mp.w_PSD / mp.dt) * scale_g2c / 50;
 gamma = sqrt(V(1, 1)) * scale_g2c;
 x0_ce = x0_kf;
@@ -175,7 +189,21 @@ cauchyEst.shutdown()
 
 plot_simulation_history(cauchyEst.moment_info, {xs,zs,ws,vs}, {xs_kf, Ps_kf} )
 
-%% Plot the result
+
+
+%%
+
+
+% function [xs, xs_kf, xs_cf] = test_nl_motor_pendulum()
+%     
+% 
+%     % simulation parameters
+%     A_c = [-(B/J + K_m^2/(J*R))]; % single dimensional system with omega (no theta yet)
+%     B_c = [K_m*V_s/(J*R)];
+%     C_c = [1];
+% 
+% end
+
 figure;
 ax(1) = subplot(2,1,1);
 plot(Ts, xs_kf(:,1)); hold on;

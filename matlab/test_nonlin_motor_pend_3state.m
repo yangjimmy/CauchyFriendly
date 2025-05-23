@@ -12,32 +12,12 @@ if ~exist('mp','var')
     pendulum_DataFile
 end
 
-% %% Generate a trajectory
-% theta_vec0 = [pi/2; 0; 0]; % initial angle of 45 degrees at 0 radians/sec
-% 
-% % propagations = 160;
-% propagations = 4000;
-% 
-% 
-% [Ts,thetas] = nonlin_transition_model(theta_vec0, [0 propagations*mp.dt]);
-% 
-% figure;
-% sgtitle('Pendulum Trajectory (angle: top), (angular rate: bottom)');
-% subplot(3, 1, 1);
-% plot(Ts, thetas(:,1));
-% subplot(3, 1, 2);
-% plot(Ts, thetas(:,2));
-% subplot(3, 1, 3);
-% plot(Ts, thetas(:,3));
-% 
-% 
-% Ts = ((0:propagations) * mp.dt)';
-% % plot makes sense since back EMF prevents the motor from rotating 
 
 %% Generate a trajectory
 % mp.sr = 10000;
 % mp.dt = 1/mp.sr; % change runge kutta step size for stability purposes
-propagations = 400; % change num propagations accordingly
+sim_time = 1; % s
+propagations = sim_time / mp.dt; % change num propagations accordingly
 
 theta_vec0 = [pi/2; 0; 0]; % initial angle of 45 degrees at 0 radians/sec
 theta_k = theta_vec0;
@@ -45,23 +25,15 @@ thetas = theta_k';
 % propagations = 160;
 
 
-% for k = 1:propagations
-%     theta_k = nonlin_transition_model_2(theta_k);
-%     thetas = [thetas; theta_k'];
-% end
+for k = 1:propagations
+    theta_k = nonlin_transition_model_2(theta_k);
+    thetas = [thetas; theta_k'];
+end
 
-
-tspan = 0:mp.dt:mp.dt*(propagations);
-sol = ode45(@trajectory_propagate,[0, mp.dt*(propagations)],theta_vec0);
-thetas = deval(sol,tspan).';
-
-% function dx_dt = trajectory_propagate(t, x)
-%     global mp;
-%     dx_dt(1) = x(2);
-%     dx_dt(2) = (-mp.B*x(2)+mp.K_m*x(3)-mp.m*mp.g*mp.l_c*sin(x(1)))/mp.J; % currently u does not depend on x
-%     dx_dt(3) = (-mp.K_m*x(2)-mp.R*x(3))/mp.L;
-%     dx_dt = reshape(dx_dt,[3,1]);
-% end
+% 
+% tspan = 0:mp.dt:mp.dt*(propagations);
+% sol = ode45(@trajectory_propagate,[0, mp.dt*(propagations)],theta_vec0);
+% thetas = deval(sol,tspan).';
 
 Ts = ((0:propagations) * mp.dt)';
 figure;
@@ -81,28 +53,27 @@ plot(Ts, thetas(:,3));
 V = mp.v_PSD;
 H = [1.0, 0.0, 0.0]; % meausrement model
 xk = theta_vec0;
-% xs = xk'; % State vector history
-% ws = [];   % Process noise history
-% vs = unifrnd(-pi/200,pi/200); % Measurement noise history; sample from uniform distribution
-% zs = H * xk + vs(1); % Measurement history
+xs = xk'; % State vector history
+ws = [];   % Process noise history
+vs = unifrnd(-pi/200,pi/200); % Measurement noise history; sample from uniform distribution
+zs = H * xk + vs(1); % Measurement history
 % propagations = 160;
 
-% for k = 1:propagations
-%     wk = mp.dt * sqrt(mp.w_PSD) * randn();
-%     xk(2) = xk(2) + wk; % Gamma = [0; 1];
-%     xk = nonlin_transition_model_2(xk);
-%     xs = [xs; xk'];
-%     ws = [ws; wk];
-%     vk = unifrnd(-pi/200,pi/200); % sample from uniform distribution
-%     zk = H * xk + vk;
-%     vs = [vs; vk];
-%     zs = [zs; zk];
-% end
-ws = mp.dt * sqrt(mp.w_PSD) * randn(propagations+1,1);
-xs = thetas + ws;
-vs = unifrnd(-pi/200,pi/200, propagations+1, 1);
-zs = xs * H.' + vs;
-plot_simulation_history([], {xs,zs,ws,vs}, [])
+for k = 1:propagations
+    wk = mp.dt * sqrt(mp.w_PSD) * randn();
+    xk(2) = xk(2) + wk; % Gamma = [0; 1];
+    % xk = nonlin_transition_model_2(xk);
+    [~,xk] = ode45(@trajectory_propagate,[0, mp.dt],xk);
+    xk = xk(end,:).';
+
+    xs = [xs; xk'];
+    ws = [ws; wk];
+    vk = unifrnd(-pi/200,pi/200); % sample from uniform distribution
+    zk = H * xk + vk;
+    vs = [vs; vk];
+    zs = [zs; zk];
+end
+% plot_simulation_history([], {xs,zs,ws,vs}, [])
 
 %% Kalman Filter
 % Continuous time Gamma (\Gamma_c)
@@ -114,6 +85,7 @@ taylor_order = 3;
 % Setting up and running the EKF
 % The gaussian_filters module has a "run_ekf" function baked in, but we'll just show the whole thing here
 P0_kf = eye(3) * 0.001;
+% P0_kf = eye(3);
 x0_kf = mvnrnd(theta_vec0, P0_kf); % lets initialize the Kalman filter slightly off from the true state position
 
 xs_kf = x0_kf;
@@ -139,19 +111,18 @@ for k = 1:propagations
     % Store estimates
     xs_kf = [xs_kf; x_kf'];
     Ps_kf(k, :, :) = P_kf;
-
 end
 
 % Plot Simulation results 
-plot_simulation_history([], {xs,zs,ws,vs}, {xs_kf, Ps_kf});
+% plot_simulation_history([], {xs,zs,ws,vs}, {xs_kf, Ps_kf});
 
 %% Cauchy
 scale_g2c = 1.0 / 1.3898; % scale factor to fit the cauchy to the gaussian
-beta = sqrt(mp.w_PSD / mp.dt) * scale_g2c / 50;
+beta = sqrt(mp.w_PSD) * scale_g2c;
 gamma = sqrt(V(1, 1)) * scale_g2c;
 x0_ce = x0_kf;
 A0 = eye(3);
-p0 = sqrt(diag(P0_kf)) * scale_g2c;
+p0 = sqrt(diag(P0_kf)) * scale_g2c;     % alpha
 b0 = zeros(3, 1);
 steps = 5;
 num_controls = 0;
@@ -174,7 +145,7 @@ print_debug = false;
 swm_print_debug = false; 
 win_print_debug = false;
 % num_windows = 8;
-num_windows = 3;
+num_windows = 4;
 % 
 cauchyEst = MSlidingWindowManager("nonlin", num_windows, swm_print_debug, win_print_debug);
 cauchyEst.initialize_nonlin(x0_ce, A0, p0, b0, beta, gamma, 'dynamics_update', 'nonlinear_msmt_model', 'msmt_model_jacobian', num_controls, mp.dt);
@@ -186,45 +157,6 @@ end
 cauchyEst.shutdown()
 
 plot_simulation_history(cauchyEst.moment_info, {xs,zs,ws,vs}, {xs_kf, Ps_kf} )
-
-
-
-%%
-
-
-% function [xs, xs_kf, xs_cf] = test_nl_motor_pendulum()
-%     
-% 
-%     % simulation parameters
-%     A_c = [-(B/J + K_m^2/(J*R))]; % single dimensional system with omega (no theta yet)
-%     B_c = [K_m*V_s/(J*R)];
-%     C_c = [1];
-% 
-% end
-
-% figure;
-% ax(1) = subplot(2,1,1);
-% plot(Ts, xs_kf(:,1)); hold on;
-% plot(Ts, cauchyEst.moment_info.x(:,1)); hold on;
-% plot(Ts, xs(:,1),'k--'); hold on;
-% legend('Kalman','Cauchy','Sim','Orientation','horizontal');
-% title('Position','Interpreter','latex');
-% xlabel('Time [s]','Interpreter','latex');
-% ylabel('Position [rad]','Interpreter','latex');
-% grid on; % grid minor;
-% 
-% ax(2) = subplot(2,1,2);
-% plot(Ts, xs_kf(:,2)); hold on;
-% plot(Ts, cauchyEst.moment_info.x(:,2)); hold on;
-% plot(Ts, xs(:,2),'k--'); hold on;
-% legend('Kalman','Cauchy','Sim');
-% title('Velocity','Interpreter','latex');
-% xlabel('Time [s]','Interpreter','latex');
-% ylabel('Velocity [rad/s]','Interpreter','latex');
-% grid on; % grid minor;
-% 
-% linkaxes(ax,'x');
-
 
 
 %%
@@ -313,11 +245,11 @@ linkaxes(ax,'x');
 % exportgraphics(gcf,'.\fig\simulink_error_sigma_1.png','Resolution',600);
 % exportgraphics(gcf,'.\fig\simulink_cauchy_oscilation.png','Resolution',600);
 
-exportgraphics(gcf,'.\fig\simulation_error_sigma_1.png','Resolution',600);
+% exportgraphics(gcf,'.\fig\simulation_error_sigma_1.png','Resolution',600);
 
 %%figure('Position',[200,200,1400,500]);
 clear ax;
-
+figure
 tiledlayout(1,3,"TileSpacing",'compact');
 % ax(1) = subplot(2,1,1);
 ax(1) = nexttile;
@@ -355,14 +287,14 @@ xlim([0,1.5]);
 
 linkaxes(ax,'x');
 
-exportgraphics(gcf,'.\fig\simulation_states.png','Resolution',600);
+% exportgraphics(gcf,'.\fig\simulation_states.png','Resolution',600);
 
 %%
-data.t = Ts;
-data.pos = xs(:,1);
-data.vel = xs(:,2);
-data.cur = xs(:,3);
-
-save('.\data\pendulum_free_simu_3.mat','data');
+% data.t = Ts;
+% data.pos = xs(:,1);
+% data.vel = xs(:,2);
+% data.cur = xs(:,3);
+% 
+% save('.\data\pendulum_free_simu_3.mat','data');
 
 

@@ -1,7 +1,6 @@
 clear; clc; close all;
 
-% global mp
-rmpath("nl_tut_callbacks")
+% rmpath("nl_tut_callbacks")
 addpath("matlab_pure");
 addpath("mp_callbacks");
 addpath("mex_files");
@@ -12,9 +11,7 @@ addpath(pwd);
 % dataPath = '.\data\pendulum_wall_0414_03_pos.mat';
 % dataPath = '.\data\pendulum_0415_04_pos.mat';
 dataPath = '.\data\pendulum_wall_simu_noise.mat';
-
 load(dataPath);
-
 
 %% Call pendulum parameter
 % generate a `mp` file logging all pendulum parameters
@@ -22,103 +19,71 @@ if ~exist('mp','var')
     pendulum_DataFile
 end
 
-%% Bode Transfer Function
-s = tf('s');
-basic_tf = (mp.K_m*mp.V_s/(mp.J*mp.R))/(s^2+s*(mp.B/mp.J+mp.K_m^2/(mp.J*mp.R)));
-bode(basic_tf);
-
-% TODO: pendulum colliding with wall
-
-%% Generate a trajectory
-theta_vec0 = [pi/2; 0]; % initial angle of 45 degrees at 0 radians/sec
-theta_k = theta_vec0;
-thetas = theta_k';
-% propagations = 160;
+%% Simulation setup
+theta_vec0 = [pi/2; 0];     % initial angle of 90 degrees at 0 radians/sec
+% sim_time = 4;               % s
 propagations = length(data.t) - 1;
+data_length = propagations + 1;
+num_state = 2;
 
-% for k = 1:propagations
-%     theta_k = nonlin_transition_model(theta_k);
-%     thetas = [thetas; theta_k'];
-% end
-% Ts = ((0:propagations) * mp.dt)';
-% figure;
-% sgtitle('Pendulum Trajectory (angle: top), (angular rate: bottom)');
-% subplot(2, 1, 1);
-% plot(Ts, thetas(:, 1));
-% subplot(2, 1, 2);
-% plot(Ts, thetas(:, 2));
+% system characteristics
+V = mp.v_PSD;       % noise variance
+W = mp.w_PSD;
 
-% plot makes sense since back EMF prevents the motor from rotating 
+% model
+H = [1.0, 0.0];             % meausrement model
+Gamma_c = [0.0; 1.0];       % Continuous time Gamma (\Gamma_c)
 
-%% Generate trajectory with noise
-% Creating the dynamic simulation
-% V = 0.009311^2; % best fit Gaussian
-% V = mp.Enc_n^2/2 * sqrt(mp.dt);
-V = mp.v_PSD;
-
-H = [1.0, 0.0]; % meausrement model
-xk = theta_vec0;
-xs = xk'; % State vector history
-ws = [];   % Process noise history
-vs = unifrnd(-pi/200,pi/200); % Measurement noise history; sample from uniform distribution
-% zs = H * xk + vs(1); % Measurement history
-% propagations = 160;
-% for k = 1:propagations
-%     wk = mp.dt * sqrt(mp.w_PSD) * randn();
-%     xk(2) = xk(2) + wk; % Gamma = [0; 1];
-%     xk = nonlin_transition_model(xk);
-%     xs = [xs; xk'];
-%     ws = [ws; wk];
-%     vk = unifrnd(-pi/200,pi/200); % sample from uniform distribution
-%     zk = H * xk + vk;
-%     vs = [vs; vk];
-%     zs = [zs; zk];
-% end
-% plot_simulation_history([], {xs,zs,ws,vs}, [])
-% 
-% ws = mp.dt * sqrt(mp.w_PSD) * randn(size(data1.t));
-% vs = unifrnd(-pi/200,pi/200,size(data1.t));
-% ws = zeros(size(data1.t));
-% vs = zeros(size(data1.t));
-
+%% Take the measurement from data
 Ts = data.t;
 % zs = data.pos;
 zs = data.pos_m;
 xs = [data.pos, data.vel];
 
 %% Kalman Filter
-% Continuous time Gamma (\Gamma_c)
-Gamma_c = [0.0; 1.0];
-W_c = mp.w_PSD;
-I2 = eye(2);
-taylor_order = 2;
+I2 = eye(2);            % 2x2 identity matrix
+taylor_order = 2;       % order of taylor expansion for transition matrix approx.
 
 % Setting up and running the EKF
 % The gaussian_filters module has a "run_ekf" function baked in, but we'll just show the whole thing here
-P0_kf = eye(2) * 0.003;
-x0_kf = mvnrnd(theta_vec0, P0_kf); % lets initialize the Kalman filter slightly off from the true state position
+P0_kf = eye(2) * 0.003;             % Initial variance
+x0_kf = mvnrnd(theta_vec0, P0_kf);  % Initial mean
 
-xs_kf = x0_kf;
-Ps_kf = zeros(propagations+1, 2, 2);
+% initialize
+xs_kf = zeros(num_state,data_length);
+Ps_kf = zeros(data_length, 2, 2);
+
+% initial condition
+xs_kf(:,1) = x0_kf;
 Ps_kf(1, :, :) = P0_kf;
+
+% propagation vectors
 x_kf = x0_kf';
 P_kf = P0_kf;
+
 for k = 1:propagations
+    % characterize nonlinear dynamics
     Jac_F = jacobian_mp_ode(x_kf);
-    [Phi_k, W_k] = discretize_nl_sys(Jac_F, Gamma_c, W_c, mp.dt, taylor_order, false, true);
+    [Phi_k, W_k] = discretize_nl_sys(Jac_F, Gamma_c, W, mp.dt, taylor_order, false, true);
+
     % Propagate covariance and state estimates
     P_kf = Phi_k * P_kf * Phi_k' + W_k;
-    x_kf = nonlin_transition_model(x_kf);
+    % x_kf = nonlin_transition_model(x_kf);
+    [~,x_kf] = ode45(@trajectory_propagate,[0, mp.dt],x_kf);
+    x_kf = x_kf(end,:).';
+
     % Form Kalman Gain, update estimate and covariance
     K = (H * P_kf * H' + V) \ (H * P_kf)';
-    zbar = H * x_kf;
-    r = zs(k+1) - zbar;
-    x_kf = x_kf + K * r;
-    P_kf = (I2 - K * H) * P_kf * (I2 - K * H)' + K * V * K';
+    zbar = H * x_kf;            % estimated measurement
+    r = zs(k+1) - zbar;         % residue
+    x_kf = x_kf + K * r;        % updated state
+    P_kf = (I2 - K * H) * P_kf * (I2 - K * H)' + K * V * K';    % covariance update
+
     % Store estimates
-    xs_kf = [xs_kf; x_kf'];
+    xs_kf(:,k+1) = x_kf;
     Ps_kf(k, :, :) = P_kf;
 end
+xs_kf = xs_kf.';
 
 % Plot Simulation results 
 % plot_simulation_history([], {xs,zs,ws,vs}, {xs_kf, Ps_kf});
@@ -164,63 +129,10 @@ cauchyEst.shutdown()
 
 % plot_simulation_history(cauchyEst.moment_info, {xs,zs,ws,vs}, {xs_kf, Ps_kf} )
 
-
-
 %%
-
-
-% function [xs, xs_kf, xs_cf] = test_nl_motor_pendulum()
-%     
-% 
-%     % simulation parameters
-%     A_c = [-(B/J + K_m^2/(J*R))]; % single dimensional system with omega (no theta yet)
-%     B_c = [K_m*V_s/(J*R)];
-%     C_c = [1];
-% 
-% end
-
-
-
 figure;
-ax(1) = subplot(2,1,1);
-plot(Ts, xs_kf(:,1)); hold on;
-plot(Ts, cauchyEst.moment_info.x(:,1),'linewidth',1.5); hold on;
-plot(Ts, data.pos,'k--'); hold on;
-legend('Kalman','Cauchy','Exp');
-title('Position','Interpreter','latex');
-xlabel('Time [s]','Interpreter','latex');
-ylabel('Position [rad]','Interpreter','latex');
-grid on; % grid minor;
-
-ax(2) = subplot(2,1,2);
-plot(Ts, xs_kf(:,2)); hold on;
-plot(Ts, cauchyEst.moment_info.x(:,2),'linewidth',1.5); hold on;
-plot(Ts, data.vel,'k--'); hold on;
-legend('Kalman','Cauchy','Exp');
-title('Velocity','Interpreter','latex');
-xlabel('Time [s]','Interpreter','latex');
-ylabel('Velocity [rad/s]','Interpreter','latex');
-grid on; % grid minor;
-
-linkaxes(ax,'x');
-
-
-
-%%
-% plot_simulation_history(cauchyEst.moment_info, {}, {xs_kf, Ps_kf} )
-
-
-cauchy_pos_e = cauchyEst.moment_info.x(:,1) - xs(:,1);
-cauchy_vel_e = cauchyEst.moment_info.x(:,2) - xs(:,2);
-kalman_pos_e = xs_kf(:,1) - xs(:,1);
-kalman_vel_e = xs_kf(:,2) - xs(:,2);
-
-
-%%
-
-figure;
-for idx = 1:2
-    ax(idx) = subplot(2,1,idx);
+for idx = 1:num_state
+    ax(idx) = subplot(num_state,1,idx);
     plot(Ts, sqrt(cauchyEst.moment_info.P(:,idx,idx)),'r'); hold on;
     plot(Ts,-sqrt(cauchyEst.moment_info.P(:,idx,idx)),'r'); hold on;
     plot(Ts, sqrt(Ps_kf(:,idx,idx)),'m'); hold on;
@@ -229,36 +141,6 @@ for idx = 1:2
     grid on;
 end
 
-linkaxes(ax,'x');
-
-%%
-figure;
-for idx = 1:2
-    % ax(idx) = subplot(2,1,idx);
-    ax(idx) = nexttile;
-    set(gca,'ColorOrderIndex',1)
-
-    yyaxis left;
-    plot(Ts, xs_kf(:,idx) - data.pos); hold on;
-    plot(Ts, cauchyEst.moment_info.x(:,idx) - data.pos); hold on;
-    yl_right = ylim;
-    ylim([-max(abs(yl_right)), max(abs(yl_right))]);
-
-    yyaxis right;
-    plot(Ts, sqrt(cauchyEst.moment_info.P(:,idx,idx)),'r'); hold on;
-    plot(Ts,-sqrt(cauchyEst.moment_info.P(:,idx,idx)),'r'); hold on;
-    plot(Ts, sqrt(Ps_kf(:,idx,idx)),'m'); hold on;
-    plot(Ts,-sqrt(Ps_kf(:,idx,idx)),'m'); hold on;
-    title('Simulated error','Interpreter','latex');
-    % legend('Cauchy 1-Sig bound','','Kalman 1-Sig bound','','interpreter','latex');
-    grid on; % grid minor;
-    
-
-    if idx == 1
-        legend('Kalman','Cauchy','Cauchy 1-Sig bound','','Kalman 1-Sig bound','', ...
-            'Location','northoutside','Orientation','horizontal','NumColumns',2);
-    end
-end
 linkaxes(ax,'x');
 
 %%
@@ -281,14 +163,13 @@ plot(Ts,  kf_std,'m'); hold on;
 plot(Ts, -kf_std,'m'); hold on;
 % title('Simulated error','Interpreter','latex');
 grid on; 
-xlim([0.18,0.4]);   % 1
-% xlim([.18,.25]);    % 2
-% ylim([-.06,.02]);   % 2
-xlim([3.5,3.9]);  % 3
+xlim([0.18,0.4]);
+% xlim([.18,.25]);
+% ylim([-.06,.02]);
 
 % ylim([-max(abs(kf_e)),max(abs(kf_e))]);
-ylabel('Position [rad]','Interpreter','latex','FontSize',14);
 xlabel('Time [s]','Interpreter','latex','FontSize',14);
+ylabel('Position [rad]','Interpreter','latex','FontSize',14);
 legend('Kalman error','Cauchy error','Cauchy 1-Sig bound','','Kalman 1-Sig bound','', ...
     'Interpreter','latex','Location','southeast','FontSize',12);
 
@@ -308,22 +189,20 @@ plot(Ts,  kf_std,'m'); hold on;
 plot(Ts, -kf_std,'m'); hold on;
 % title('Simulated error','Interpreter','latex');
 grid on; 
-% xlim([.18,.4]);  % 1
-% xlim([.18,.25]);  % 2
-% ylim([-11,2]);    % 2
-xlim([3.5,3.9]);  % 3
-
+xlim([.18,.4]);
+% xlim([.18,.25]);
+% ylim([-11,2]);
 
 ylabel('Velocity [rad/s]','Interpreter','latex','FontSize',14);
 xlabel('Time [s]','Interpreter','latex','FontSize',14);
 
 
-sgtitle('Error and 1-sigma bound - Simulink','Interpreter','latex');
+sgtitle('Error and 1-sigma bound - Experiment','Interpreter','latex');
 
 linkaxes(ax,'x');
 
-% exportgraphics(gcf,'.\fig\simulink_error_sigma_1.png','Resolution',600);
-exportgraphics(gcf,'.\fig\simulink_cauchy_oscilation.png','Resolution',600);
+% exportgraphics(gcf,'.\fig\exp_error_sigma_1.png','Resolution',600);
+
 
 
 %%
@@ -356,4 +235,4 @@ xlim([0,1.5]);
 
 linkaxes(ax,'x');
 
-exportgraphics(gcf,'.\fig\simulink_states.png','Resolution',600);
+% exportgraphics(gcf,'.\fig\exp_states.png','Resolution',600);

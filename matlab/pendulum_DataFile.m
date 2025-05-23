@@ -6,7 +6,7 @@ global mp
 mp = struct(...
     'g', 9.81, ... % gravitational constant
     'B', 8.1055e-6, ... % motor damping
-    'L', 0.23e-3, ... % inductance
+    'L', .23e-3, ... % inductance .23e-3
     'R', 3.85, ... % resistance
     'V_s', 10.7, ... % supply voltage
     'K_m', 0.0228, ... % motor constant
@@ -14,7 +14,7 @@ mp = struct(...
     'l_c', 0.0254, ... % length of rod
     'J_motor', 1.67e-6, ...
     'J_rod', 2.12*1E-5, ...
-    'sr', 100, ... % sampling rate (Hz) % 100
+    'sr', 1000, ... % sampling rate (Hz) % 100
     'w_PSD', 0.01, ... % process noise Power spectral density
     'EncRes', 400 ... % encoder resolution per revolution
 );

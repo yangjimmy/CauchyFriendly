@@ -73,13 +73,20 @@ function plot_simulation_history(cauchy_moment_info, simulation_history, kf_hist
 
     % Plot the true state history vs the conditional mean estimate
     figure;
-    if with_kf
-        sgtitle('True States (red) vs Cauchy (blue) vs Kalman (black--)');
+    if ~(with_kf && with_ce)
+        sgtitle('True States (red)');
     else
-        sgtitle('True States (red) vs Cauchy Estimates (blue)');
+        if with_ce && with_kf
+            sgtitle('True States (red) vs Cauchy (blue) vs Kalman (black--)');           
+        elseif with_kf
+            sgtitle('True States (red) vs Kalman (black--)');
+        else
+            sgtitle('True States (red) vs Cauchy Estimates (blue)');
+        end
     end
+
     for i = 1:n
-        subplot(n, 1, i);
+        ax(i) = subplot(n, 1, i);
         hold on;
 
         if with_sim
@@ -93,28 +100,45 @@ function plot_simulation_history(cauchy_moment_info, simulation_history, kf_hist
         end
         hold off;
     end
+    linkaxes(ax,'x');
+    clear ax;
 
     % Plot the state error and one-sigma bound of the covariance
-    figure;
-    if with_kf
+    % figure;
+    % if with_kf
+    %     sgtitle('Cauchy 1-Sig (blue/red) vs Kalman 1-Sig (black-/purple-)');
+    % else
+    %     sgtitle('State Error (b) vs One Sigma Bound (r)');
+    % end
+    if with_kf && with_ce
+        figure;
         sgtitle('Cauchy 1-Sig (blue/red) vs Kalman 1-Sig (black-/purple-)');
-    else
-        sgtitle('State Error (b) vs One Sigma Bound (r)');
+    elseif with_kf 
+        figure;
+        sgtitle('State Error vs Kalman 1-Sig (black-/purple-)');
+    elseif with_ce 
+        figure;
+        sgtitle('State Error vs Cauchy 1-Sig (blue/red)');
     end
-    for i = 1:n
-        subplot(n, 1, i);
-        hold on;
-        if with_ce
-            plot(T(cd+1:plot_len), true_states(cd+1:plot_len,i) - means(:,i), 'b');
-            plot(T(cd+1:plot_len), scale*sqrt(covars(:,i,i)), 'r');
-            plot(T(cd+1:plot_len), -scale*sqrt(covars(:,i,i)), 'r');
+
+    if with_ce || with_kf
+        for i = 1:n
+            ax(i) = subplot(n, 1, i);
+            hold on;
+            if with_ce
+                plot(T(cd+1:plot_len), true_states(cd+1:plot_len,i) - means(:,i), 'b');
+                plot(T(cd+1:plot_len), scale*sqrt(covars(:,i,i)), 'r');
+                plot(T(cd+1:plot_len), -scale*sqrt(covars(:,i,i)), 'r');
+            end
+            if with_kf
+                plot(T(1:plot_len), true_states(1:plot_len,i) - kf_cond_means(1:plot_len,i), 'k--');
+                plot(T(1:plot_len), scale*sqrt(kf_cond_covars(1:plot_len,i,i)), 'm--');
+                plot(T(1:plot_len), -scale*sqrt(kf_cond_covars(1:plot_len,i,i)), 'm--');
+            end
+            hold off;
         end
-        if with_kf
-            plot(T(1:plot_len), true_states(1:plot_len,i) - kf_cond_means(1:plot_len,i), 'k--');
-            plot(T(1:plot_len), scale*sqrt(kf_cond_covars(1:plot_len,i,i)), 'm--');
-            plot(T(1:plot_len), -scale*sqrt(kf_cond_covars(1:plot_len,i,i)), 'm--');
-        end
-        hold off;
+        linkaxes(ax,'x');
+        clear ax;
     end
 
     % Plot the errors on top of one another
@@ -129,7 +153,6 @@ function plot_simulation_history(cauchy_moment_info, simulation_history, kf_hist
             hold off
         end
     end
-        
 
     % Plot the measurements, and the measurement and process noise
     if with_sim
@@ -140,7 +163,7 @@ function plot_simulation_history(cauchy_moment_info, simulation_history, kf_hist
         count = 1;
 
         % Plot measurements (msmts)
-        subplot(m, 1, count);
+        ax(count) = subplot(m, 1, count);
         hold on;
         for i = 1:size(msmts, 2)
             plot(T(1:plot_len), msmts(1:plot_len, i), strcat('m', line_types{i}));
@@ -149,7 +172,7 @@ function plot_simulation_history(cauchy_moment_info, simulation_history, kf_hist
         count = count + 1;
         
         % Plot measurement noise (msmt_noises)
-        subplot(m, 1, count);
+        ax(count) = subplot(m, 1, count);
         hold on;
         for i = 1:size(msmt_noises, 2)
             plot(T(1:plot_len), msmt_noises(1:plot_len, i), strcat('k', line_types{i}));
@@ -158,27 +181,31 @@ function plot_simulation_history(cauchy_moment_info, simulation_history, kf_hist
         count = count + 1;
         
         % Plot process noise (proc_noises)
-        subplot(m, 1, count);
+        ax(count) = subplot(m, 1, count);
         hold on;
         for i = 1:size(proc_noises, 2)
             plot(T(2:plot_len), proc_noises(1:plot_len-1, i), strcat('b', line_types{i}));
         end
         hold off;
+        linkaxes(ax,'x');
+        clear ax;
     end
     
     % Plot the max complex error in the mean/covariance and norm factor
     if with_ce
         figure;
         sgtitle('Complex Errors (mean,covar,norm factor) in Semi-Log');
-        subplot(3, 1, 1);
+        ax(1) = subplot(3, 1, 1);
         semilogy(T(cd+1:plot_len), cerr_means, 'k');
         
-        subplot(3, 1, 2);
+        ax(2) = subplot(3, 1, 2);
         semilogy(T(cd+1:plot_len), cerr_covars, 'k');
         
         abs_cerr_norm_factors = abs(cerr_norm_factors);
-        subplot(3, 1, 3);
+        ax(3) = subplot(3, 1, 3);
         semilogy(T(cd+1:plot_len), abs_cerr_norm_factors, 'k');
+        linkaxes(ax,'x');
+        clear ax;
     end
     
 end

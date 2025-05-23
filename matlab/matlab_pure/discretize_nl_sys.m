@@ -33,6 +33,11 @@ function varargout = discretize_nl_sys(JacA, G, Q, dt, order, with_Gamk, with_Wk
             Gam_k = Gam_k + (JacA^i * G * dt^(i+1)) / factorial(i+1);
         end
     end
+    % Phi_k = expm(JacA*dt);
+    % if with_Gamk
+    %     Gam_k = expm(JacA*dt) * G;
+    % end
+
 
     if with_Wk
         % Form Discrete Time Noise Matrix Qk
