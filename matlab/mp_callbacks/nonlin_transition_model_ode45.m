@@ -1,4 +1,4 @@
-function dx_dt = trajectory_propagate(t, x)
+function dx_dt = nonlin_transition_model_ode45(t, x)
     global mp;
     dx_dt = zeros(2, 1);
     % x1 = theta, x2 = omega

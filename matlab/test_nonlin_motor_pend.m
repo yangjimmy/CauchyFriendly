@@ -44,7 +44,7 @@ Gamma_c = [0.0; 1.0];       % Continuous time Gamma (\Gamma_c)
 % end
 % thetas = thetas.';
 
-% --- Generate trajectory with ode solvers
+% --- Generate trajectory with ode45 solver (instead of runge_kutta4)
 tspan = 0:mp.dt:sim_time;
 sol = ode45(@trajectory_propagate,[0, sim_time],theta_vec0);
 thetas = deval(sol,tspan).';

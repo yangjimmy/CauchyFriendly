@@ -1,5 +1,7 @@
 clc; clear; close all;
 
+% comparison between free fall experiment and simulation
+
 dataExp = load('.\data\pendulum_0415_04_pos.mat');
 load('.\data\pendulum_free_simu.mat');
 dataSimulink = data;

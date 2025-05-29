@@ -1,6 +1,6 @@
 
 
-addpath("Model3");
+addpath("simulink");
 
 % Revolute joint state
 % smiData.RevoluteJoint(1).Rz.Pos
