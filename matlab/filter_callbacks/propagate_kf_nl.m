@@ -1,7 +1,18 @@
-function [xs_kf, Ps_kf] = propagate_kf_nl(x0_kf,P0_kf,zs,propagations,disc_taylor_order)
+function [xs_kf, Ps_kf] = propagate_kf_nl(x0_kf,P0_kf,zs,propagations, disc_taylor_order)
+    arguments
+        x0_kf;
+        P0_kf;
+        zs;
+        propagations = size(zs,1);
+        disc_taylor_order = 2;
+    end
+
     global mp
     % initialize
-    xs_kf = zeros(num_state,data_length);
+    data_length = propagations + 1;
+    num_states = size(x0_kf,2);
+    I = eye(num_states);
+    xs_kf = zeros(num_states,data_length);
     Ps_kf = zeros(data_length, 2, 2);
     W = mp.w_PSD;
     V = mp.v_PSD;
@@ -10,7 +21,7 @@ function [xs_kf, Ps_kf] = propagate_kf_nl(x0_kf,P0_kf,zs,propagations,disc_taylo
     dt = mp.dt;
     
     % initial condition
-    xs_kf(:,1) = x0_kf;
+    xs_kf(:,1) = x0_kf';
     Ps_kf(1, :, :) = P0_kf;
     
     % propagation vectors
@@ -33,7 +44,7 @@ function [xs_kf, Ps_kf] = propagate_kf_nl(x0_kf,P0_kf,zs,propagations,disc_taylo
         zbar = H * x_kf;            % estimated measurement
         r = zs(k+1) - zbar;         % residue
         x_kf = x_kf + K * r;        % updated state
-        P_kf = (I2 - K * H) * P_kf * (I2 - K * H)' + K * V * K';    % covariance update
+        P_kf = (I - K * H) * P_kf * (I - K * H)' + K * V * K';    % covariance update
     
         % Store estimates
         xs_kf(:,k+1) = x_kf;
