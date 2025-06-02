@@ -59,6 +59,7 @@ cauchyEst = propagate_cf_nl(x0_kf,P0_kf,zs,scale_g2c,propagations);
 
 %%
 figure;
+num_state = size(mp.H,2);
 for idx = 1:num_state
     ax(idx) = subplot(num_state,1,idx);
     plot(Ts(2:end), sqrt(cauchyEst.moment_info.P(:,idx,idx)),'r'); hold on;
