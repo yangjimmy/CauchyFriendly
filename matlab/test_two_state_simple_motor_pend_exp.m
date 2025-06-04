@@ -1,17 +1,13 @@
 clear; clc; close all;
 
-% rmpath("nl_tut_callbacks")
 addpath("matlab_pure");
-addpath("mp_callbacks");
+addpath("two_state_simple_callbacks");
 addpath("mex_files");
-addpath("filter_callbacks")
+addpath("filter_callbacks");
 addpath(pwd);
 
 %% Path of the data
-% dataPath = '.\data\pendulum_wall_0414_01_pos.mat';
-% dataPath = '.\data\pendulum_wall_0414_03_pos.mat';
-% dataPath = '.\data\pendulum_0415_04_pos.mat';
-dataPath = '.\data\pendulum_wall_0424_05_pos.mat';
+dataPath = '.\data\pendulum_wall_0603_01_truncated.mat';
 
 data = load(dataPath);
 
@@ -23,19 +19,16 @@ end
 
 %% Simulation setup
 theta_vec0 = [pi/2; 0];     % initial angle of 90 degrees at 0 radians/sec
-% sim_time = 4;               % s
 propagations = length(data.t) - 1;
-
-% system characteristics
-V = mp.v_PSD;       % noise variance
-W = mp.w_PSD;
 
 % model
 mp.H = [1.0, 0.0];             % meausrement model
 mp.Gamma_c = [0.0; 1.0];       % Continuous time Gamma (\Gamma_c), multiplies process noise w
 
 %% Take the measurement from data
-Ts = data.t;
+Ts = data.t; % 1000 Hz
+mp.dt = mean(Ts(2:end)-Ts(1:end-1));
+mp.sr = 1/mp.dt;
 zs = data.pos;
 xs = [data.pos, data.vel];
 
@@ -47,17 +40,14 @@ taylor_order = 2;       % order of taylor expansion for transition matrix approx
 P0_kf = eye(2) * 0.003;             % Initial variance
 x0_kf = mvnrnd(theta_vec0, P0_kf);  % Initial mean
 
-[xs_kf, Ps_kf] = propagate_kf_nl(x0_kf,P0_kf,zs,propagations,taylor_order);
-
-% Plot Simulation results 
-% plot_simulation_history([], {xs,zs,ws,vs}, {xs_kf, Ps_kf});
+[xs_kf, Ps_kf] = propagate_kf_nl_tss(x0_kf,P0_kf,zs,propagations,taylor_order);
 
 %% Cauchy
 scale_g2c = 1.0 / 1.3898;
 cauchyEst = propagate_cf_nl(x0_kf,P0_kf,zs,scale_g2c,propagations);
-% plot_simulation_history(cauchyEst.moment_info, {xs,zs,ws,vs}, {xs_kf, Ps_kf} )
 
 %%
+max_x_limit = 2;
 figure;
 num_state = size(mp.H,2);
 for idx = 1:num_state
@@ -66,6 +56,7 @@ for idx = 1:num_state
     plot(Ts(2:end),-sqrt(cauchyEst.moment_info.P(:,idx,idx)),'r'); hold on;
     plot(Ts, sqrt(Ps_kf(:,idx,idx)),'m'); hold on;
     plot(Ts,-sqrt(Ps_kf(:,idx,idx)),'m'); hold on;
+    xlim([-inf,max_x_limit]);
     legend('Cauchy 1-Sig bound','','Kalman 1-Sig bound','','interpreter','latex');
     grid on;
 end
@@ -73,6 +64,7 @@ end
 linkaxes(ax,'x');
 
 %%
+
 clear ax;
 figure('Position',[200,200,1000,500]);
 tiledlayout(1,2,'TileSpacing','compact')
@@ -86,13 +78,13 @@ c_std = sqrt(cauchyEst.moment_info.P(:,idx,idx));
 
 plot(Ts, kf_e); hold on;
 plot(Ts(2:end), c_e); hold on;
-plot(Ts(2:end),  c_std,'r'); hold on;
-plot(Ts(2:end), -c_std,'r'); hold on;
-plot(Ts,  kf_std,'m'); hold on;
-plot(Ts, -kf_std,'m'); hold on;
+plot(Ts(2:end),  c_std,'g'); hold on;
+plot(Ts(2:end), -c_std,'g'); hold on;
+plot(Ts,  kf_std,'k'); hold on;
+plot(Ts, -kf_std,'k'); hold on;
 % title('Simulated error','Interpreter','latex');
 grid on; 
-xlim([0.18,0.4]);
+xlim([-inf,max_x_limit]);
 % xlim([.18,.25]);
 % ylim([-.06,.02]);
 
@@ -112,19 +104,18 @@ c_std = sqrt(cauchyEst.moment_info.P(:,idx,idx));
 
 plot(Ts, kf_e); hold on;
 plot(Ts(2:end), c_e); hold on;
-plot(Ts(2:end),  c_std,'r'); hold on;
-plot(Ts(2:end), -c_std,'r'); hold on;
-plot(Ts,  kf_std,'m'); hold on;
-plot(Ts, -kf_std,'m'); hold on;
+plot(Ts(2:end),  c_std,'g'); hold on;
+plot(Ts(2:end), -c_std,'g'); hold on;
+plot(Ts,  kf_std,'k'); hold on;
+plot(Ts, -kf_std,'k'); hold on;
 % title('Simulated error','Interpreter','latex');
 grid on; 
-xlim([.18,.4]);
+xlim([-inf,max_x_limit]);
 % xlim([.18,.25]);
 % ylim([-11,2]);
 
 ylabel('Velocity [rad/s]','Interpreter','latex','FontSize',14);
 xlabel('Time [s]','Interpreter','latex','FontSize',14);
-
 
 sgtitle('Error and 1-sigma bound - Experiment','Interpreter','latex');
 
@@ -132,7 +123,65 @@ linkaxes(ax,'x');
 
 % exportgraphics(gcf,'.\fig\exp_error_sigma_1.png','Resolution',600);
 
+%%
 
+clear ax;
+figure('Position',[200,200,1000,500]);
+tiledlayout(1,2,'TileSpacing','compact')
+% ax(1) = subplot(2,1,1);
+ax(1) = nexttile;
+idx = 1;
+kf_e = xs_kf(:,idx) - data.pos;
+c_e = cauchyEst.moment_info.x(:,idx) - data.pos(2:end);
+% kf_std = sqrt(Ps_kf(:,idx,idx));
+% c_std = sqrt(cauchyEst.moment_info.P(:,idx,idx));
+
+plot(Ts, 100*kf_e./data.pos,'b'); hold on;
+plot(Ts(2:end), 100*c_e./data.pos(2:end),'r');
+% plot(Ts(2:end),  c_std,'g'); hold on;
+% plot(Ts(2:end), -c_std,'g'); hold on;
+% plot(Ts,  kf_std,'k'); hold on;
+% plot(Ts, -kf_std,'k'); hold on;
+% title('Simulated error','Interpreter','latex');
+grid on; 
+xlim([-inf,max_x_limit]);
+ylim([-0.5,0.5]);
+% xlim([.18,.25]);
+% ylim([-.06,.02]);
+
+% ylim([-max(abs(kf_e)),max(abs(kf_e))]);
+xlabel('Time [s]','Interpreter','latex','FontSize',14);
+ylabel('Position Percent Error','Interpreter','latex','FontSize',14);
+legend('Kalman error','Cauchy error', ...
+    'Interpreter','latex','Location','southeast','FontSize',12);
+
+% ax(2) = subplot(2,1,2);
+ax(2) = nexttile;
+idx = 2;
+kf_e = xs_kf(:,idx) - data.vel;
+c_e = cauchyEst.moment_info.x(:,idx) - data.vel(2:end);
+
+plot(Ts, 100*kf_e./data.vel,'b'); hold on;
+plot(Ts(2:end), 100*c_e./data.vel(2:end),'r'); hold on;
+% plot(Ts(2:end),  c_std,'g'); hold on;
+% plot(Ts(2:end), -c_std,'g'); hold on;
+% plot(Ts,  kf_std,'k'); hold on;
+% plot(Ts, -kf_std,'k'); hold on;
+% title('Simulated error','Interpreter','latex');
+grid on; 
+xlim([-inf,max_x_limit]);
+ylim([-0.5,0.5]);
+% xlim([.18,.25]);
+% ylim([-11,2]);
+
+ylabel('Velocity Percent Error','Interpreter','latex','FontSize',14);
+xlabel('Time [s]','Interpreter','latex','FontSize',14);
+
+sgtitle('Percent Error - Experiment','Interpreter','latex');
+
+% linkaxes(ax,'x');
+
+% exportgraphics(gcf,'.\fig\exp_error_sigma_1.png','Resolution',600);
 
 %%
 clear ax;
