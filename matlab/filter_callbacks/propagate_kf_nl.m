@@ -35,9 +35,9 @@ function [xs_kf, Ps_kf] = propagate_kf_nl(x0_kf,P0_kf,zs,propagations, disc_tayl
     
         % Propagate covariance and state estimates
         P_kf = Phi_k * P_kf * Phi_k' + W_k;
-        % x_kf = nonlin_transition_model(x_kf);
-        [~,x_kf] = ode45(@nonlin_transition_model_ode45,[0, dt],x_kf);
-        x_kf = x_kf(end,:).';
+        x_kf = nonlin_transition_model(x_kf);
+        % [~,x_kf] = ode45(@nonlin_transition_model_ode45,[0, dt],x_kf);
+        % x_kf = x_kf(end,:).';
     
         % Form Kalman Gain, update estimate and covariance
         K = (H * P_kf * H' + V) \ (H * P_kf)';

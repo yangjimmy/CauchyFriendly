@@ -1,4 +1,4 @@
-clear; clc; close all;
+% clear; clc; close all;
 
 % rmpath("nl_tut_callbacks")
 addpath("matlab_pure");
@@ -6,11 +6,16 @@ addpath("mp_callbacks");
 addpath("mex_files");
 addpath(pwd);
 
+k_std_color = 'b';
+k_err_color = 'r';
+c_std_color = 'g';
+c_err_color = 'k';
+
 %% Path of the data
 % dataPath = '.\data\pendulum_wall_0414_01_pos.mat';
 % dataPath = '.\data\pendulum_wall_0414_03_pos.mat';
 % dataPath = '.\data\pendulum_0415_04_pos.mat';
-dataPath = '.\data\pendulum_wall_simu_noise.mat';
+dataPath = '.\data\pendulum_wall_simu.mat';
 load(dataPath);
 
 %% Call pendulum parameter
@@ -68,9 +73,9 @@ for k = 1:propagations
 
     % Propagate covariance and state estimates
     P_kf = Phi_k * P_kf * Phi_k' + W_k;
-    % x_kf = nonlin_transition_model(x_kf);
-    [~,x_kf] = ode45(@trajectory_propagate,[0, mp.dt],x_kf);
-    x_kf = x_kf(end,:).';
+    x_kf = nonlin_transition_model(x_kf);
+    % [~,x_kf] = ode45(@trajectory_propagate,[0, mp.dt],x_kf);
+    % x_kf = x_kf(end,:).';
 
     % Form Kalman Gain, update estimate and covariance
     K = (H * P_kf * H' + V) \ (H * P_kf)';
@@ -133,10 +138,10 @@ cauchyEst.shutdown()
 figure;
 for idx = 1:num_state
     ax(idx) = subplot(num_state,1,idx);
-    plot(Ts, sqrt(cauchyEst.moment_info.P(:,idx,idx)),'r'); hold on;
-    plot(Ts,-sqrt(cauchyEst.moment_info.P(:,idx,idx)),'r'); hold on;
-    plot(Ts, sqrt(Ps_kf(:,idx,idx)),'m'); hold on;
-    plot(Ts,-sqrt(Ps_kf(:,idx,idx)),'m'); hold on;
+    plot(Ts, sqrt(cauchyEst.moment_info.P(:,idx,idx)),c_std_color); hold on;
+    plot(Ts,-sqrt(cauchyEst.moment_info.P(:,idx,idx)),c_std_color); hold on;
+    plot(Ts, sqrt(Ps_kf(:,idx,idx)),k_std_color); hold on;
+    plot(Ts,-sqrt(Ps_kf(:,idx,idx)),k_std_color); hold on;
     legend('Cauchy 1-Sig bound','','Kalman 1-Sig bound','','interpreter','latex');
     grid on;
 end
@@ -154,13 +159,14 @@ kf_e = xs_kf(:,idx) - data.pos;
 c_e = cauchyEst.moment_info.x(:,idx) - data.pos;
 kf_std = sqrt(Ps_kf(:,idx,idx));
 c_std = sqrt(cauchyEst.moment_info.P(:,idx,idx));
-
-plot(Ts, kf_e); hold on;
-plot(Ts, c_e); hold on;
-plot(Ts,  c_std,'r'); hold on;
-plot(Ts, -c_std,'r'); hold on;
-plot(Ts,  kf_std,'m'); hold on;
-plot(Ts, -kf_std,'m'); hold on;
+% kf 
+plot(Ts, kf_e, k_err_color); hold on;
+plot(Ts,  kf_std, k_std_color); hold on;
+plot(Ts, -kf_std, k_std_color); hold on;
+% cauchy
+plot(Ts, c_e, c_err_color); hold on;
+plot(Ts,  c_std, c_std_color); hold on;
+plot(Ts, -c_std, c_std_color); hold on;
 % title('Simulated error','Interpreter','latex');
 grid on; 
 xlim([0.18,0.4]);
@@ -170,7 +176,7 @@ xlim([0.18,0.4]);
 % ylim([-max(abs(kf_e)),max(abs(kf_e))]);
 xlabel('Time [s]','Interpreter','latex','FontSize',14);
 ylabel('Position [rad]','Interpreter','latex','FontSize',14);
-legend('Kalman error','Cauchy error','Cauchy 1-Sig bound','','Kalman 1-Sig bound','', ...
+legend('Kalman error','Kalman 1-Sig bound','','Cauchy error','Cauchy 1-Sig bound','', ...
     'Interpreter','latex','Location','southeast','FontSize',12);
 
 % ax(2) = subplot(2,1,2);
@@ -180,14 +186,14 @@ kf_e = xs_kf(:,idx) - data.vel;
 c_e = cauchyEst.moment_info.x(:,idx) - data.vel;
 kf_std = sqrt(Ps_kf(:,idx,idx));
 c_std = sqrt(cauchyEst.moment_info.P(:,idx,idx));
-
-plot(Ts, kf_e); hold on;
-plot(Ts, c_e); hold on;
-plot(Ts,  c_std,'r'); hold on;
-plot(Ts, -c_std,'r'); hold on;
-plot(Ts,  kf_std,'m'); hold on;
-plot(Ts, -kf_std,'m'); hold on;
-% title('Simulated error','Interpreter','latex');
+% kf
+plot(Ts, kf_e, k_err_color); hold on;
+plot(Ts,  kf_std,k_std_color); hold on;
+plot(Ts, -kf_std,k_std_color); hold on;
+% cauchy
+plot(Ts, c_e, c_err_color); hold on;
+plot(Ts,  c_std,c_std_color); hold on;
+plot(Ts, -c_std,c_std_color); hold on;
 grid on; 
 xlim([.18,.4]);
 % xlim([.18,.25]);
@@ -202,6 +208,7 @@ sgtitle('Error and 1-sigma bound - Experiment','Interpreter','latex');
 linkaxes(ax,'x');
 
 % exportgraphics(gcf,'.\fig\exp_error_sigma_1.png','Resolution',600);
+exportgraphics(gcf,'.\fig\simu_error_sigma.png','Resolution',600);
 
 
 
@@ -236,3 +243,4 @@ xlim([0,1.5]);
 linkaxes(ax,'x');
 
 % exportgraphics(gcf,'.\fig\exp_states.png','Resolution',600);
+exportgraphics(gcf,'.\fig\simu_states.png','Resolution',600);

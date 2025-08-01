@@ -47,9 +47,9 @@ figure;
 plot(t, rad2deg(pos));
 figure; plot(t, vel);
 
-if enableNoise
-    save('.\data\pendulum_wall_simu_noise','data');
-else
-    save('.\data\pendulum_wall_simu','data');
-end
+% if enableNoise
+%     save('.\data\pendulum_wall_simu_noise','data');
+% else
+%     save('.\data\pendulum_wall_simu','data');
+% end
 

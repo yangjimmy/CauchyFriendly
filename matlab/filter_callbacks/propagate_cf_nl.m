@@ -41,15 +41,17 @@ function cauchyEst = propagate_cf_nl(x0_kf,P0_kf,zs,scale_g2c,propagations,num_c
         % Sliding window
         swm_print_debug = false; 
         win_print_debug = false;
-        num_windows = 4;
+        num_windows = 2;
         % 
         cauchyEst = MSlidingWindowManager("nonlin", num_windows, swm_print_debug, win_print_debug);
         cauchyEst.initialize_nonlin(x0_ce, A0, p0, b0, beta, gamma, 'dynamics_update', 'nonlinear_msmt_model', 'msmt_model_jacobian', num_controls, dt);
         % charACTERIZE the rate
+        tic;
         for k = 1:propagations
             zk = zs(k);
             [xhat, Phat, wavg_xhat, wavg_Phat] = cauchyEst.step(zk, []);
         end
+        toc;
         cauchyEst.shutdown();
     end
 end

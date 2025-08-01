@@ -14,7 +14,7 @@ mp = struct(...
     'l_c', 0.0254, ... % length of rod
     'J_motor', 1.67e-6, ...
     'J_rod', 2.12*1E-5, ...
-    'sr', 1000, ... % sampling rate (Hz) % 100
+    'sr', 1000, ... % sampling rate (Hz) % 100'
     'w_PSD', 0.01, ... % process noise Power spectral density
     'EncRes', 400 ... % encoder resolution per revolution
 );
@@ -24,5 +24,11 @@ mp.dt = 1/mp.sr;
 mp.Enc_n = 2 * pi / mp.EncRes; % encoder noise (uniform distributed noise)
 mp.VelRes = mp.EncRes / mp.dt;
 % PSD setting
+% mp.v_PSD = (2*mp.Enc_n)^2 /12 / mp.dt;
 mp.v_PSD = mp.Enc_n^2 /12 / mp.dt;
 mp.w_PSD = mp.w_PSD / mp.dt;
+
+% model
+mp.H = [1.0, 0.0];             % meausrement model
+mp.Gamma_c = [0.0; 1.0];       % Continuous time Gamma (\Gamma_c), multiplies process noise w
+

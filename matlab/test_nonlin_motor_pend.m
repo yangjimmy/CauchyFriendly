@@ -19,7 +19,7 @@ end
 
 %% Simulation setup
 theta_vec0 = [pi/2; 0];     % initial angle of 90 degrees at 0 radians/sec
-sim_time = 4;               % s
+sim_time = 5;               % s
 propagations = sim_time / mp.dt;
 data_length = propagations + 1;
 num_state = 2;
@@ -36,18 +36,18 @@ Gamma_c = [0.0; 1.0];       % Continuous time Gamma (\Gamma_c)
 %% Generate a trajectory
 % theta_k = theta_vec0;
 % --- Generate trajectory with nonlinear transition model
-% thetas = zeros(num_state,propagations+1);
-% thetas(:,1) = theta_vec0;
-% for k = 1:propagations
-%     theta_k = nonlin_transition_model(thetas(:,k));
-%     thetas(:,k+1) = theta_k;
-% end
-% thetas = thetas.';
+thetas = zeros(num_state,propagations+1);
+thetas(:,1) = theta_vec0;
+for k = 1:propagations
+    theta_k = nonlin_transition_model(thetas(:,k));
+    thetas(:,k+1) = theta_k;
+end
+thetas = thetas.';
 
 % --- Generate trajectory with ode45 solver (instead of runge_kutta4)
-tspan = 0:mp.dt:sim_time;
-sol = ode45(@trajectory_propagate,[0, sim_time],theta_vec0);
-thetas = deval(sol,tspan).';
+% tspan = 0:mp.dt:sim_time;
+% sol = ode45(@trajectory_propagate,[0, sim_time],theta_vec0);
+% thetas = deval(sol,tspan).';
 
 Ts = ((0:propagations) * mp.dt)';
 figure;
@@ -73,9 +73,9 @@ zs(1) = H * xs(:,1) +vs(1);
 for k = 1:propagations
     wk = sqrt(W) * randn() * mp.dt;
     xk = xs(:,k);
-    % xk = nonlin_transition_model(xk);
-    [~,xk] = ode45(@trajectory_propagate,[0, mp.dt],xk);
-    xk = xk(end,:).';
+    xk = nonlin_transition_model(xk);
+    % [~,xk] = ode45(@trajectory_propagate,[0, mp.dt],xk);
+    % xk = xk(end,:).';
     % Dynamic equation: dx = Phi xdt + Gamma dw
     xk = xk + Gamma_c * ws(k+1);
     xs(:,k+1) = xk;
@@ -113,9 +113,9 @@ for k = 1:propagations
 
     % Propagate covariance and state estimates
     P_kf = Phi_k * P_kf * Phi_k' + W_k;
-    % x_kf = nonlin_transition_model(x_kf);
-    [~,x_kf] = ode45(@trajectory_propagate,[0, mp.dt],x_kf);
-    x_kf = x_kf(end,:).';
+    x_kf = nonlin_transition_model(x_kf);
+    % [~,x_kf] = ode45(@trajectory_propagate,[0, mp.dt],x_kf);
+    % x_kf = x_kf(end,:).';
 
     % Form Kalman Gain, update estimate and covariance
     K = (H * P_kf * H' + V) \ (H * P_kf)';
@@ -135,7 +135,7 @@ plot_simulation_history([], {xs,zs,ws,vs}, {xs_kf, Ps_kf});
 
 %% Cauchy
 scale_g2c = 1.0 / 1.3898;       % scale factor to fit the cauchy to the gaussian
-beta = sqrt(mp.w_PSD / mp.dt) * scale_g2c / 50;
+beta = sqrt(mp.w_PSD / mp.dt) * scale_g2c;
 gamma = sqrt(V(1, 1)) * scale_g2c;
 x0_ce = x0_kf;
 A0 = eye(2);
@@ -162,7 +162,8 @@ print_debug = false;
 swm_print_debug = false; 
 win_print_debug = false;
 % num_windows = 8;
-num_windows = 4;
+num_windows = 6;
+tic;
 % 
 cauchyEst = MSlidingWindowManager("nonlin", num_windows, swm_print_debug, win_print_debug);
 cauchyEst.initialize_nonlin(x0_ce, A0, p0, b0, beta, gamma, 'dynamics_update', 'nonlinear_msmt_model', 'msmt_model_jacobian', num_controls, mp.dt);
@@ -172,7 +173,7 @@ for k = 1:length(zs)
     [xhat, Phat, wavg_xhat, wavg_Phat] = cauchyEst.step(zk, []);
 end
 cauchyEst.shutdown()
-
+toc;
 plot_simulation_history(cauchyEst.moment_info, {xs,zs,ws,vs}, {xs_kf, Ps_kf} )
 
 %% Plot the result
