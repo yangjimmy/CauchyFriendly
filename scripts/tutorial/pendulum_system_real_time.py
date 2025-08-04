@@ -1,0 +1,243 @@
+#!/usr/bin/env python
+# coding: utf-8
+
+# Pendulum dynamics equation
+# \begin{align}
+# \dfrac{dx_1}{dt} &= x_2 \\
+# \dfrac{dx_2}{dt} &= -\frac{m g l_c}{J} sin(x_1) - (\frac{B}{J} + \frac{K_m^2}{JR}) x_2
+# \end{align}
+
+# ----- Import libraries -----
+import numpy as np 
+import cauchy_estimator as ce 
+import gaussian_filters as gf
+import matplotlib.pyplot as plt
+# import 
+# import serial communication
+
+
+# ----- Define system parameters -----
+class PendulumParams:    
+    def __init__(self, dt=0.001):
+        self.g = 9.81
+        self.B = 8.1055e-6
+        self.L = .23e-3
+        self.R = 3.85
+        self.V_s = 10.7
+        self.K_m = 0.0228
+        self.m = 0.03937
+        self.l_c = 0.0254
+        self.J_motor = 1.67e-6
+        self.J_rod = 2.12e-5
+        self.w_PSD = .01
+        self.EncRes = 400
+        self.w_PSD = .01
+        self.H = np.array([1.0,0.0])
+        self.Gamma_c = np.array([[0.0],[1.0]])
+        
+        self.dt = dt
+        self.sr = 1/self.dt
+        
+        self.J = self.J_motor + self.J_rod
+        self.Enc_n = 2 * np.pi / self.EncRes
+        self.VelRes = self.EncRes / self.dt
+        self.v_PSD = self.Enc_n**2 / 12 / self.dt
+        self.w_PSD = self.w_PSD / self.dt
+        
+mp = PendulumParams() # Lets just make a simple globally viewable object to get ahold of these parameters when we want them
+
+# ----- Define system dynamics -----
+# The ODE
+def pend_ode(x):
+    dx_dt = np.zeros(2)
+    dx_dt[0] = x[1]
+    # dx_dt[1] = -mp.g / mp.L * np.sin(x[0]) - mp.c * x[1]
+    dx_dt[1] = -(mp.B/mp.J + mp.K_m**2/(mp.J*mp.R))*x[1]-mp.m*mp.g*mp.l_c*np.sin(x[0])/mp.J
+    return dx_dt 
+
+# Nonlinear transition model from t_k to t_k+1...ie: dt
+def nonlin_transition_model(x):
+    return ce.runge_kutta4(pend_ode, x, mp.dt)
+
+# Jacobian
+def jacobian_pendulum_ode(x):
+    Jac = np.zeros((2,2))
+    # Jac[0,1] = 1
+    # Jac[1,0] = -mp.g/mp.L*np.cos(x[0])
+    # Jac[1,1] = -mp.c
+    Jac[0,1] = 1
+    Jac[1,0] = -mp.m*mp.g*mp.l_c*np.cos(x[0])/mp.J
+    Jac[1,1] = -(mp.B/mp.J + mp.K_m**2/(mp.J*mp.R))
+    return Jac
+
+# ----- Estimator step -----
+# Kalman step
+def Kalman_step(x_kf, P_kf, z, taylor_order = 2):
+    # return x_kf and P_kf
+    Jac_F = jacobian_pendulum_ode(x_kf)
+    Phi_k, W_k = ce.discretize_nl_sys(Jac_F, Gamma_c, W_c, mp.dt, taylor_order, with_Gamk = False, with_Wk = True)
+    # Propagate covariance and state estimates
+    P_kf = Phi_k @ P_kf @ Phi_k.T + W_k
+    x_kf = nonlin_transition_model(x_kf)
+    # Form Kalman Gain, update estimate and covariance
+    K = P_kf @ H.T @ np.linalg.inv(H @ P_kf @ H.T + V)
+    zbar = H @ x_kf
+    r = z - zbar
+    x_kf += K @ r 
+    P_kf = (I2 - K @ H) @ P_kf @ (I2 - K @ H).T + K @ V @ K.T
+    return x_kf, P_kf
+
+# ----- System initial condition -----
+
+theta_vec0 = np.array([np.pi/2, 0]) # initial angle of 45 degrees at 0 radians/sec
+theta_k = theta_vec0.copy()
+thetas = [theta_k]
+
+exp_time = 5 # s
+propagations = 5 / mp.dt + 1
+
+
+
+
+# Creating the dynamic simulation
+H = mp.H
+Gamma_c = mp.Gamma_c
+V = np.array([[mp.v_PSD]])
+W_c = np.array([[mp.w_PSD]])
+I2 = np.eye(2)
+H = H.reshape((1,2))
+
+# Setting up and running the EKF
+# The gaussian_filters module has a "run_ekf" function baked in, but we'll just show the whole thing here
+P0_kf = np.eye(2) * 0.003
+x0_kf = np.random.multivariate_normal(theta_vec0, P0_kf) # lets initialize the Kalman filter slightly off from the true state position
+
+xs_kf = [x0_kf.copy()] 
+Ps_kf = [P0_kf.copy()] 
+x_kf = x0_kf.copy()
+P_kf = P0_kf.copy()
+
+# Start experiment
+state_log = []
+measurement_log = []
+
+for k in range(propagations):
+    # z is the measurement. replace None with real measurement from serial communication returned value
+    z = None
+
+    x_kf, P_kf = Kalman_step(x_kf,P_kf, z)
+    # Store returned states, measurement
+    
+    # Store estimates
+    xs_kf.append(x_kf.copy())
+    Ps_kf.append(P_kf.copy())
+xs_kf = np.array(xs_kf)
+Ps_kf = np.array(Ps_kf)
+# Plot Simulation results 
+# ce.plot_simulation_history( None, (xs,zs,ws,vs), (xs_kf, Ps_kf) )
+
+
+# In[6]:
+
+
+# This is the callback function correpsonding to the decription for point 1.) above 
+def foobar_dynamics_update(c_duc):
+    pyduc = ce.Py_CauchyDynamicsUpdateContainer(c_duc)
+    ## Propagate x 
+    #x = pyduc.cget_x()
+    #u = pyduc.cget_u()
+    #xbar <- f(x,u)
+    #pyduc.cset_x(xbar)
+    #pyduc.cset_is_xbar_set_for_ece() # need to call this!
+    ## Phi, Gamma, beta may update
+    #pyduc.cset_Phi(Phi)
+    #pyduc.cset_Gamma(Gamma)
+    #pyduc.cset_beta(beta)
+
+# This is the callback function correpsonding to the decription for point 2.) above 
+def foobar_nonlinear_msmt_model(c_duc, c_zbar):
+    pyduc = ce.Py_CauchyDynamicsUpdateContainer(c_duc)
+    ## Set zbar
+    #x = pyduc.cget_x() # xbar
+    #zbar = msmt_model(x)
+    #pyduc.cset_zbar(c_zbar, zbar)
+
+# This is the callback function correpsonding to the decription for point 3.) above 
+def foobar_msmt_model_jacobian(c_duc):
+    pyduc = ce.Py_CauchyDynamicsUpdateContainer(c_duc)
+    ## H and gamma may update
+    #x = pyduc.cget_x() # xbar
+    # H <- jacobian( h(x) )
+    #pyduc.cset_H(H)
+    #pyduc.cset_gamma(gamma)
+
+
+# In[7]:
+
+
+# This is the callback function correpsonding to the decription for point 1.) above 
+def dynamics_update(c_duc):
+    pyduc = ce.Py_CauchyDynamicsUpdateContainer(c_duc)
+    ## Propagate x 
+    xk = pyduc.cget_x()
+    xbar = nonlin_transition_model(xk) # propagate from k -> k+1
+    pyduc.cset_x(xbar)
+    pyduc.cset_is_xbar_set_for_ece() # need to call this!
+    ## Phi, Gamma, beta may update
+    Jac_F = jacobian_pendulum_ode(xk)
+    Phi_k, Gam_k = ce.discretize_nl_sys(Jac_F, Gamma_c, None, mp.dt, taylor_order, with_Gamk=True, with_Wk=False)
+    pyduc.cset_Phi(Phi_k)
+    pyduc.cset_Gamma(Gam_k)
+    #pyduc.cset_beta(beta)
+
+# This is the callback function correpsonding to the decription for point 2.) above 
+def nonlinear_msmt_model(c_duc, c_zbar):
+    pyduc = ce.Py_CauchyDynamicsUpdateContainer(c_duc)
+    ## Set zbar
+    xbar = pyduc.cget_x() # xbar
+    zbar = H @ xbar # for other systems, call your nonlinear h(x) function
+    pyduc.cset_zbar(c_zbar, zbar)
+
+# This is the callback function correpsonding to the decription for point 3.) above 
+def msmt_model_jacobian(c_duc):
+    pyduc = ce.Py_CauchyDynamicsUpdateContainer(c_duc)
+    ## Set H: for other systems, call your nonlinear jacobian function H(x)
+    pyduc.cset_H(H) # we could write some if condition to only set this once, but its such a trivial overhead, who cares
+
+scale_g2c = 1.0 / 1.3898 # scale factor to fit the cauchy to the gaussian
+beta = np.array([mp.w_PSD / mp.dt])**0.5 * scale_g2c
+gamma = np.array([V[0,0]**0.5]) * scale_g2c
+x0_ce = x0_kf.copy()
+A0 = np.eye(2)
+p0 = np.diag(P0_kf)**0.5 * scale_g2c 
+b0 = np.zeros(2)
+steps = 5
+num_controls = 0
+print_debug = True
+cauchyEst = ce.PyCauchyEstimator("nonlin", steps, print_debug)
+cauchyEst.initialize_nonlin(x0_ce, A0, p0, b0, beta, gamma, dynamics_update, nonlinear_msmt_model, msmt_model_jacobian, num_controls, mp.dt)
+cauchyEst.step(zs[0])
+cauchyEst.step(zs[1])
+cauchyEst.step(zs[2])
+cauchyEst.step(zs[3])
+cauchyEst.step(zs[4])
+cauchyEst.shutdown()
+
+
+# In[8]:
+
+
+swm_print_debug = False 
+win_print_debug = False
+num_windows = 6
+cauchyEst = ce.PySlidingWindowManager("nonlin", num_windows, swm_print_debug, win_print_debug)
+cauchyEst.initialize_nonlin(x0_ce, A0, p0, b0, beta, gamma, dynamics_update, nonlinear_msmt_model, msmt_model_jacobian, num_controls, mp.dt)
+for zk in zs:
+    cauchyEst.step(zk, None)
+cauchyEst.shutdown()
+
+# ce.plot_simulation_history( cauchyEst.moment_info, (xs,zs,ws,vs), (xs_kf, Ps_kf) )
+#ce.plot_simulation_history( cauchyEst.avg_moment_info, (xs,zs,ws,vs), (xs_kf, Ps_kf) )
+
+
+# We can see that the Cauchy Estimator is a bit pessimistic in its estimates, as its 1-sigma bounds are fairly larger than the EKFs for both states. This can happen when H does not include coefficients touching all states. The estimation results are good, nevertheless, but since we are in Gaussian noise, a very simple fix is to tune the process noise statistic down slightly for the estimator, until the Cauchy 1-sigma bounds hugs that of the EKF:

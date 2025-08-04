@@ -4,12 +4,16 @@ printf "This script wraps a C++ header only file to have a python interface thro
 
 FILE_NAME="pycauchy" 
 SWIG_FILE=${FILE_NAME}.i
+INCLUDE_FILE=${FILE_NAME}.hpp
+
+PYTHON_INC_FILE="-I/home/william/CauchyFriendly/.venv/bin/python"
+
 
 # Include + Library path symbols
 LIB_MATH_PTHREAD="-lm -lpthread"
-INC_PYTHON=-I"/usr/local/include/python3.7m"
-LIB_PYTHON=-L"/usr/local/lib -lpython3.7m"
-INC_NUMPY=-I"/usr/local/lib/python3.7/site-packages/numpy/core/include"
+INC_PYTHON=-I"/usr/include/python3.12"
+LIB_PYTHON=-L"/usr/lib/x86_64-linux-gnu -lpython3.12"
+INC_NUMPY=-I"/home/william/CauchyFriendly/.venv/lib/python3.12/site-packages/numpy/_core/include"
 
 
 # For cluster
@@ -27,7 +31,7 @@ echo "All temp files / libraries initially deleted"
 #sleep 1
 echo "Creating new temp files / libraries..."
 
-/home/natsubuntu/Desktop/SysControl/estimation/CauchyCPU/CauchyEst_Nat/CauchyFriendly/scripts/swig/swig_download/install_swig/bin/swig -c++ -python ${SWIG_FILE}
+/home/william/CauchyFriendly/scripts/swig/swig_download/install_swig/bin/swig -c++ -python ${SWIG_FILE}
 if [ $? -eq 1 ]; then 
     echo "[ERROR:] swig -c++ -python ${SWIG_FILE} command returned with failure!"
     exit 1

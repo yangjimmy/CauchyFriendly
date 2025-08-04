@@ -1180,7 +1180,7 @@ class PySlidingWindowManager():
 
     def _best_window_est(self):
         W = self.num_windows
-        okays = np.zeros(W, dtype=np.bool)
+        okays = np.zeros(W, dtype=bool)
         idxs = []
         check_idx = self.p-1
         COV_UNSTABLE = 2
@@ -1710,6 +1710,14 @@ def plot_2D_pointwise_cpdfs(XYZ_list, cond_means_list, colors):
         plt.show()
 
 # runge kutta integrator
+def runge_kutta4_input(f, x, u, dt):
+    k1 = f(x, u)
+    k2 = f(x + dt*k1/2.0, u)
+    k3 = f(x + dt*k2/2.0, u)
+    k4 = f(x + dt*k3, u)
+    x_new = x + 1.0 / 6.0 * (k1 + 2*k2 + 2*k3 + k4) * dt 
+    return x_new
+
 def runge_kutta4(f, x, dt):
     k1 = f(x)
     k2 = f(x + dt*k1/2.0)
