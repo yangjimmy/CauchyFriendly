@@ -12,7 +12,7 @@ import numpy as np
 import cauchy_estimator as ce 
 import gaussian_filters as gf
 import matplotlib.pyplot as plt
-from serial_com import C2000_Communication as C2000
+from scripts.tutorial.pendulum_device import C2000_Communication as C2000
 import time
 from pendulum_params import PendulumParams
         

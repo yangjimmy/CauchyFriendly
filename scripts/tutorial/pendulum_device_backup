@@ -26,7 +26,7 @@ class C2000_Communication():
         self.ser = serial.Serial(self.port, self.baudrate, timeout=timeout)
         
         self.data_size = 4
-        self.data_length = 3
+        self.data_length = 4
         self.zero_pos = np.zeros([2,1])
         self.latest = False
         
@@ -91,10 +91,10 @@ class C2000_Communication():
         """
         Set the motor device into idle status
         """
-        self.transmit_msg([0,0])
+        self.transmit_msg([0,0,0])
 
-    def run(self,control_cmd):
-        self.transmit_msg([1,control_cmd])
+    def run(self,control_cmd,tag=0):
+        self.transmit_msg([1,control_cmd,tag])
 
     def reset(self):
         msg, _ = self.get_latest_msg()
@@ -106,7 +106,8 @@ class C2000_Communication():
         if msg is None or len(msg) < self.data_length:
             return None  # or raise an exception
         value = np.array(msg[1:3]).reshape([2,1])
-        return (value - self.zero_pos), status
+        tag_v = msg[3]
+        return (value - self.zero_pos), status, tag_v
     
     # receive message status check
     # idle :         0

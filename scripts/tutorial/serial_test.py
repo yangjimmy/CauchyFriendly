@@ -1,4 +1,4 @@
-from serial_com import C2000_Communication as C2000
+from pendulum_device import C2000_Communication as C2000
 import time
 import matplotlib.pyplot as plt
 import numpy as np
@@ -19,18 +19,26 @@ start_time = time.time()
 states_log = []
 
 motor_device.run(.2)
+count = 0
 
 while True:
     if time.time() - start_time >= timer - dt*.01:
         timer = timer + dt
         status = False
+        
         while True:
-            states, status = motor_device.get_states()
+            
+            states, status, tag_v = motor_device.get_states()
             if status:
+                print("New states!")
+                motor_device.run(-0.4, step)
                 break
             else:
-                time.sleep(0.00001)
+                time.sleep(0.0002)
         # print(states)
+        if tag_v == step:
+            count += 1
+        print(step, tag_v - step)
         step = step + 1
         states_log.append(states.copy())
     if step > 5000:
@@ -38,6 +46,7 @@ while True:
 
 print(time.time() - start_time)
 motor_device.disconnect()
+print(count)
 
 states_log = np.array(states_log)
 
