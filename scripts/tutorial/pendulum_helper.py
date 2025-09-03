@@ -213,6 +213,7 @@ class PendulumParams:
         ## Set H: for other systems, call your nonlinear jacobian function H(x)
         pyduc.cset_H(self.H) # we could write some if condition to only set this once, but its such a trivial overhead, who cares
 
+    # Initialization of cauchy filter
     def cauchy_start(self, num_windows):
         self.num_windows = num_windows
         cauchyEst = ce.PySlidingWindowManager(self.system_type, num_windows, self.swm_print_debug,self.win_print_debug)
@@ -234,7 +235,6 @@ class PendulumParams:
             return self.w_PSD**.5 * np.random.randn(size)
         return self.w_PSD**.5 * np.random.randn(size[0], size[1])
         
-
     def measurement_noise_generation(self, size=1):
         """
         Generate measurement noise - uniform ~ [-Enc_n, Enc_n]. \\

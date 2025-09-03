@@ -29,6 +29,7 @@ class C2000_Communication():
         self.latest = False
         
         self.running = True
+        self.ini_counter = 0
     
     def __del__(self):
         self.disconnect()
@@ -41,6 +42,9 @@ class C2000_Communication():
             self.ser.close()
     
     def receive_msg(self):
+        """
+        Receive message from the serial port with the format of [uint16, uint16, float, float].
+        """
         while self.running and self.ser.is_open:
             # try:
             byte = self.ser.read(1)
@@ -62,29 +66,48 @@ class C2000_Communication():
         msg : [uint16, uint16, float]
             message to send
         """
+        msg[0] += self.ini_counter
+        msg[0] &= 0xffff
+        # print(msg[0])
+        # msg[0] &= 0xffff
         payload = struct.pack('<HHf', *msg)
         message = b'S' + payload + b'E'
         self.ser.write(message)
-
-    def idle(self):
+        # print(msg[0])
+    
+    
+    def idle(self, counter=0):
         """
         Set the motor device into idle status
         """
-        self.transmit_msg([0, 0, 0.0])
-
+        # counter &= 0xffff
+        self.transmit_msg([counter, 0, 0.0])
+    
     def reset_counter(self):
         """
         Reset the time counter on C2000
         """
-        self.ser.reset_input_buffer()
-        self.ser.reset_output_buffer()
-        self.transmit_msg([0, 1, 0.0])
-    
+        # self.ser.reset_input_buffer()
+        # self.ser.reset_output_buffer()
+        # self.transmit_msg([0, 1, 0.0])
+        counter, status, states = self.get_states()
+        self.ini_counter = counter
+        print(f"Counter reseted at {counter}")
+        return counter, status, states
+
     def run(self, counter, control_cmd=0.0):
-        self.transmit_msg([counter, 2, float(control_cmd)])
+        # counter &= 0xffff
+        if control_cmd == 0.0:
+            self.transmit_msg([counter, 0, float(control_cmd)])
+        else:
+            self.transmit_msg([counter, 2, float(control_cmd)])
     
     def reset_counter_run(self,control_cmd=0.0):
+        # counter &= 0xffff
         self.transmit_msg([0, 3, float(control_cmd)])
+        counter, status, states = self.get_states()
+        self.ini_counter = counter
+        return counter, status, states
 
     def _get_real_states(self):
         msg = self.receive_msg()
@@ -93,15 +116,18 @@ class C2000_Communication():
         states = np.array(msg[2:4]).reshape([2,1])
         return counter, status, states
 
-    def reset(self):
+    def reset_encoder(self):
         _, status, states = self._get_real_states()
         self.zero_pos = states
         print(f"Reset complete at {states}!")
     
     def get_states(self):
-        counter, status, states = self._get_real_states()
-        return counter, status, (states - self.zero_pos)
+        counter, status, real_states = self._get_real_states()
+        return counter, status, (real_states - self.zero_pos)
 
+    def get_meas(self):
+        counter, status, states = self.get_states()
+        return counter, status, states[0][0]
         
     
     

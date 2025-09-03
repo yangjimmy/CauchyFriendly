@@ -1,58 +1,35 @@
 from pendulum_device import *
 import time
 
-motor = C2000_Communication()
-motor.reset()
+port = '/dev/ttyAMA0'
+baudrate = 460800
 
-motor.reset_counter()
+motor = C2000_Communication(port, baudrate)
+
+unsync_counter = 0
+motor.reset_encoder()
+motor.idle()
 start_time = time.time()
-cmd = 0.5
-for i in range(1000):
-    print(motor.receive_msg())
-    cmd *= -1
-    motor.run(1000, 0.2)
-    time.sleep(0.0005)
-print(time.time() - start_time)
+input("Just input")
+time.sleep(0.004)
+# motor.reset_counter()
+# ini_counter, status, states = motor.get_states()
+unsync = False
+ini_counter, status, states = motor.reset_counter()
+print(ini_counter)
+for i in range(0,501):
+    motor.run(i, control_cmd=0.0)
+    counter, status, states = motor.get_states()
+    # print(states[0,0])
+    if status != 0:
+        print(f"Status {status}, sent {i}, received {counter}")
+        motor.idle()
+        unsync = True
+        break
 
+if not unsync:
+    print("Run sucessfully")
+print(f"Program took {time.time() - start_time} s.")
+# print(f"Program was unsync for {unsync_counter} samples.")
 motor.disconnect()
-
-
-# import serial
-# import struct
-# import numpy
-# import time
-
-
-
-# def receive_msg(ser):
-#     # try:
-#     while True:
-#         byte = ser.read(1)
-#         if byte == b'S':
-#             payload = ser.read(12)
-#             terminator = ser.read(1)
-#             if terminator == b'E':
-#                 msg = struct.unpack('<HHff', payload)
-#                 return msg
-# def transmit_msg(ser, msg):
-#         """
-#         Send message to serial port
-#         Parameters:
-#         -----
-#         msg : [uint16, uint16, float]
-#             message to send
-#         """
-#         payload = struct.pack('<Hf', *msg)
-#         message = b'S' + payload + b'E'
-#         ser.write(message)
-# port = '/dev/ttyUSB0'
-# baudrate = 5e6
-# ser = serial.Serial(port, baudrate=baudrate,timeout=0.001)
-
-# for i in range(1000):
-#     print(receive_msg(ser))
-#     transmit_msg(ser, [4, -.2])
-
-
-# ser.close()
 

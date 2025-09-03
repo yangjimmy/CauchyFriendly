@@ -12,8 +12,8 @@ PYTHON_INC_FILE="-I/home/william/CauchyFriendly/.venv/bin/python"
 # Include + Library path symbols
 LIB_MATH_PTHREAD="-lm -lpthread"
 INC_PYTHON=-I"/usr/include/python3.12"
-LIB_PYTHON=-L"/usr/lib/x86_64-linux-gnu -lpython3.12"
-INC_NUMPY=-I"/home/william/CauchyFriendly/.venv/lib/python3.12/site-packages/numpy/_core/include"
+LIB_PYTHON=-L"/usr/lib/aarch64-linux-gnu -lpython3.12"
+INC_NUMPY=-I"/home/cauchy/CauchyFriendly/.venv/lib/python3.12/site-packages/numpy/_core/include"
 
 
 # For cluster
@@ -31,7 +31,7 @@ echo "All temp files / libraries initially deleted"
 #sleep 1
 echo "Creating new temp files / libraries..."
 
-/home/william/CauchyFriendly/scripts/swig/swig_download/install_swig/bin/swig -c++ -python ${SWIG_FILE}
+/home/cauchy/CauchyFriendly/scripts/swig/swig_download/install_swig/bin/swig -c++ -python ${SWIG_FILE}
 if [ $? -eq 1 ]; then 
     echo "[ERROR:] swig -c++ -python ${SWIG_FILE} command returned with failure!"
     exit 1
