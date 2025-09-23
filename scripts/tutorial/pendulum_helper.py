@@ -34,7 +34,9 @@ class PendulumParams:
         self.l_c = 0.0254
         self.J_motor = 1.67e-6
         self.J_rod = 2.12e-5
-        self.EncRes = 400
+        # self.EncRes = 400
+        # self.EncRes = 100
+        self.EncRes = 50
         
         # Sampling parameters
         self.dt = dt
