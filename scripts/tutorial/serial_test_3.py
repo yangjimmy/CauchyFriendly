@@ -17,7 +17,7 @@ start_time = time.time()
 # motor.reset_counter()
 # ini_counter, status, states = motor.get_states()  
 unsync = False
-ini_counter, status, states = motor.reset_counter(hardware_reset = True)
+ini_counter, status, t_pos, t_vel, z = motor.reset_counter(hardware_reset = True)
 # print(ini_counter)
 # NOTE: ini_counter does not reset here! it resets on falling edge of reset signal, which is on the next motor.get_states() call
 
@@ -25,7 +25,7 @@ duration = 5 # s
 
 for i in range(0, int(duration / Ts)):
     motor.run(i, control_cmd=0.0)
-    counter, status, states = motor.get_states()
+    counter, status, t_pos, t_vel, z = motor.get_states()
     # print(states[0,0])
     if status != 0 and i != 0:
         print(f"Unsync, status {status}, sent {i}, received {counter}")

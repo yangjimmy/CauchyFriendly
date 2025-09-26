@@ -10,8 +10,12 @@ import pdb
 
 port = '/dev/ttyAMA0'
 baudrate = 460800
-motor = C2000_Communication(port, baudrate)
+timeout  = 0.001
+divider  = 5 * 8
+motor = C2000_Communication(port, baudrate, timeout, divider)
 mp = PendulumParams(dt=0.004, num_controls=1)
+
+print(motor.count_size)
 
 disturbance = pd.read_csv('disturbance.csv')
 disturbance = disturbance.to_numpy()
@@ -26,6 +30,7 @@ x0 = np.array([[np.pi/2], [0]])
 P0 = np.eye(2) * mp.v_PSD**.5
 mp.set_initial(x0, P0)
 
+
 exp_time = 5 # s
 propagations = int(exp_time / mp.dt) + 1
 
@@ -36,7 +41,11 @@ step = 0
 u = np.array(0.0)
 
 estimator_start = False
+# estimator_start = True
 control_enable = False
+
+
+mp.cauchy_start(num_windows)
 
 states_log = []
 measurement_log = []
@@ -50,39 +59,35 @@ print(motor.get_states())
 # start the estimator
 time.sleep(0.01)
 input("Is the pendulum set in place? ")
-
-ini_counter, status, states = motor.reset_counter(hardware_reset=True)
-_, _, z_prev = motor.get_meas()
+counter, status, t_pos, t_vel, z_prev = motor.reset_counter(hardware_reset=True)
+# counter, status, t_pos, t_vel, z = motor.get_meas()
 print(f"Pendulum set at: {z_prev}")
-time.sleep(0.1)
+time.sleep(0.01)
 print("Drop the pendulum")
 
 start_time = time.time()
 estimator_time = start_time
 
-ini_counter, status, states = motor.reset_counter(hardware_reset=True)
+ini_counter, status, t_pos_prev, t_vel, z_prev = motor.reset_counter(hardware_reset=True)
 
 while True:
-    counter, status, x_meas = motor.get_states()
+    counter, status, t_pos, t_vel, z = motor.get_states()
 
-    # motor.run(step, control_cmd=u)
     # motor.run(step, control_cmd=0.0)
+    # motor.run(step, control_cmd=u)
 
     # disturbance injection
     if control_enable:
         motor.run(step, control_cmd=u+disturbance[step])
     else:
         motor.run(step, control_cmd=0.0)
-
-    z = x_meas[0, 0]
     
     # print(z)
     if not estimator_start: # estimator_start == False
-        if abs(z_prev - z) > 0.1:
+        if abs(t_pos_prev - t_pos) > 0.003:
             estimator_start = True
             estimator_time = time.time()
-            mp.cauchy_start(num_windows)
-            ini_counter, status, states = motor.reset_counter(hardware_reset=True)
+            ini_counter, status, t_pos, t_vel, z = motor.reset_counter(hardware_reset=True)
             # print(f"Estimator starts at {estimator_time - start_time}, z: {z}, z_prev: {z_prev}, initial counter: {ini_counter}")
             print(f"Estimator starts at {estimator_time - start_time}, z: {z}, z_prev: {z_prev}")
             ini_counter = 0
@@ -93,22 +98,26 @@ while True:
             motor.idle()
             unsync = True
             break
+
+        
+        # xhat, Phat, wavg_xhat, wavg_Phat = mp.cauchy_step(z, u)
+        xhat, _, _, _ = mp.cauchy_step(z, u)
         
         if not control_enable:
             if z <= -0.75:
                 control_enable = True 
                 print(f"Control starts at {step}")
-        # cauchyEst.step(z, None)
-        mp.cauchy_step(z, u)
         
         # Store returned states, measurement
-        states_log.append(x_meas.copy())
-        measurement_log.append(z.copy())
+        states_log.append([[t_pos],[t_vel]])
+        measurement_log.append(z)
         control_log.append(float(u))
+
         if control_enable:
-            u = K @ x_meas
+            u = K @ xhat
         else:
             u = 0.0
+
         step += 1
         if step > propagations:
             break
@@ -159,6 +168,8 @@ plt.show()
 
 N = len(states_log)
 
-save_data = np.concatenate((states_log.reshape(N, 2), means.reshape(N,2), covars[:,0,0].reshape(N,1), covars[:,1,1].reshape(N,1), control_log.reshape(N,1)), axis=1)
+save_data = np.concatenate((measurement_log.reshape(N,1), states_log.reshape(N, 2), means.reshape(N,2), covars[:,0,0].reshape(N,1), covars[:,1,1].reshape(N,1), control_log.reshape(N,1)), axis=1)
 np.savetxt("data_log.csv", save_data, delimiter=",")
+
+print(means.shape)
 

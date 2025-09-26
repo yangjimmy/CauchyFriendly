@@ -3,12 +3,13 @@ import struct
 import numpy as np
 import time
 import threading
+import math
 
 class C2000_Communication():
     """
     Establish communication via serial communication.
     """
-    def __init__(self,port='/dev/ttyUSB0',baudrate=5e6,timeout=0.001):
+    def __init__(self,port='/dev/ttyUSB0',baudrate=5e6,timeout=0.001,divider=5):
         """ Initialize C2000_Communication. Connect to serial port
 
         Paramaters:
@@ -25,11 +26,19 @@ class C2000_Communication():
         self.baudrate = baudrate
         self.ser = serial.Serial(self.port, self.baudrate, timeout=timeout)
         
-        self.zero_pos = np.zeros([2,1])
+        self.zero_count = 0
         self.latest = False
+        self.t_pos = 0
         
         self.running = True
         self.ini_counter = 0
+
+        self.divider = divider
+        self.truth_encoder_res = 2000
+        self.truth_count_size = 2 * np.pi / self.truth_encoder_res
+        self.encoder_res = int(2000 / divider)
+        self.count_size = 2 * np.pi / self.encoder_res
+        
     
     def __del__(self):
         self.disconnect()
@@ -49,10 +58,10 @@ class C2000_Communication():
             # try:
             byte = self.ser.read(1)
             if byte == b'S':
-                payload = self.ser.read(12)
+                payload = self.ser.read(6)
                 terminator = self.ser.read(1)
-                if terminator == b'E' and len(payload) == 12:
-                    msg = struct.unpack('<HHff', payload)
+                if terminator == b'E' and len(payload) == 6:
+                    msg = struct.unpack('<HHh', payload)
                     return msg
             # except Exception as e:
             #     print(f"[Receive Error] {e}")
@@ -68,8 +77,6 @@ class C2000_Communication():
         """
         msg[0] += self.ini_counter
         msg[0] &= 0xffff
-        # print(msg[0])
-        # msg[0] &= 0xffff
         payload = struct.pack('<HHf', *msg)
         message = b'S' + payload + b'E'
         self.ser.write(message)
@@ -91,12 +98,12 @@ class C2000_Communication():
             self.transmit_msg([0, 1, 0.0])
             self.ser.reset_input_buffer()
             self.ser.reset_output_buffer()
-            counter, status, states = self.get_states()
+            counter, status, t_pos, t_vel, z = self.get_states()
         else:
-            counter, status, states = self.get_states()
+            counter, status, t_pos, t_vel, z = self.get_states()
             self.ini_counter = counter
             print(f"Counter reseted at {counter}")
-        return counter, status, states
+        return counter, status, t_pos, t_vel, z
 
     def run(self, counter, control_cmd=0.0):
         # counter &= 0xffff
@@ -113,25 +120,26 @@ class C2000_Communication():
         self.ini_counter = counter
         return counter, status, states
 
-    def _get_real_states(self):
+    def _get_real_count(self):
         msg = self.receive_msg()
-        counter = msg[0]
-        status = msg[1]
-        states = np.array(msg[2:4]).reshape([2,1])
-        return counter, status, states
+        return msg[0], msg[1], msg[2]
+        # counter = msg[0]
+        # status = msg[1]
+        # count = msg[2]
+        # return counter, status, count
 
     def reset_encoder(self):
-        _, status, states = self._get_real_states()
-        self.zero_pos = states
-        print(f"Reset complete at {states}!")
+        _, status, count = self._get_real_count()
+        self.zero_count = count
+        print(f"Reset complete at {count}!")
     
     def get_states(self):
-        counter, status, real_states = self._get_real_states()
-        return counter, status, (real_states - self.zero_pos)
-
-    def get_meas(self):
-        counter, status, states = self.get_states()
-        return counter, status, states[0][0]
+        counter, status, count = self._get_real_count()
+        t_pos = (count - self.zero_count) * self.truth_count_size
+        t_vel = (t_pos - self.t_pos) / 0.004
+        self.t_pos = t_pos
+        z = round((count - self.zero_count)/self.divider) * self.count_size
+        return counter, status, t_pos, t_vel, z
     
     @staticmethod
     def saturation(x, lb, ub=None):

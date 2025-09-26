@@ -496,6 +496,7 @@ class PySlidingWindowManager_CPP():
         self.moment_info["cerr_fz"].append(cerr_fz)
         self.moment_info["win_idx"] = win_idx
         self.moment_info["err_code"].append(err_code)
+        # return x[1].reshape(2,1)
         
     # Shuts down sliding window manager
     def shutdown(self):

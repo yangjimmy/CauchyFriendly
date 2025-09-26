@@ -6,3 +6,5 @@ pycauchy.py
 cauchy_estimator.py 
 gaussian_filters.py
 pthreadVC2.dll
+.png
+.csv
