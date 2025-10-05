@@ -1,4 +1,4 @@
-% clc; clear; close all;
+clc; clear; close all;
 
 addpath("simulink");
 
@@ -18,9 +18,10 @@ samplingRate = 1 / samplingTime;
 enableNoise = true;
 % enableNoise = false;
 
-feedback_control = false;
-% feedback_control = true;
+% feedback_control = false;
+feedback_control = true;
 
+control_start_time = 0.2;
 
 %% Simulink setup
 % Initial state
@@ -33,9 +34,8 @@ x0 = [0; 0];
 % K = -[0.1151    0.0112];
 % K = zeros(1,2);
 load('lqr_K.mat')
-K
-K = -K;
-
+K;
+K = -K
 
 % K = -[0.0289, 0.0048];
 
@@ -78,9 +78,9 @@ grid on;
 %     save('.\data\pendulum_wall_simu','data');
 % end
 
-if feedback_control
-    save('.\data\pendulum_wall_simu_fb','data');
-else
-    save('.\data\pendulum_wall_simu','data');
-end
+% if feedback_control
+%     save('.\data\pendulum_wall_simu_fb','data');
+% else
+%     save('.\data\pendulum_wall_simu','data');
+% end
 

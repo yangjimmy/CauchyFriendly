@@ -1,4 +1,4 @@
-% clear; clc; close all;
+clear; clc; close all;
 
 % rmpath("nl_tut_callbacks")
 addpath("matlab_pure");
@@ -6,13 +6,15 @@ addpath("mp_callbacks");
 addpath("mex_files");
 addpath(pwd);
 
-k_std_color = 'b';
+k_std_color = 'b--';
 k_err_color = 'r';
-c_std_color = 'g';
+c_std_color = 'g--';
 c_err_color = 'k';
+
 
 %% Path of the data
 % dataPath = '.\data\pendulum_wall_0414_01_pos.mat';
+% data = load(dataPath);
 % dataPath = '.\data\pendulum_wall_0414_03_pos.mat';
 % dataPath = '.\data\pendulum_0415_04_pos.mat';
 dataPath = '.\data\pendulum_wall_simu.mat';
@@ -95,8 +97,11 @@ xs_kf = xs_kf.';
 
 %% Cauchy
 scale_g2c = 1.0 / 1.3898; % scale factor to fit the cauchy to the gaussian
-beta = sqrt(mp.w_PSD / mp.dt) * scale_g2c;
-gamma = sqrt(V(1, 1)) * scale_g2c;
+% beta = sqrt(mp.w_PSD) * scale_g2c;
+% gamma = sqrt(V(1, 1)) * scale_g2c;
+beta = mp.beta;
+gamma = mp.gamma;
+
 x0_ce = x0_kf;
 A0 = eye(2);
 p0 = sqrt(diag(P0_kf)) * scale_g2c;
@@ -135,18 +140,18 @@ cauchyEst.shutdown()
 % plot_simulation_history(cauchyEst.moment_info, {xs,zs,ws,vs}, {xs_kf, Ps_kf} )
 
 %%
-figure;
-for idx = 1:num_state
-    ax(idx) = subplot(num_state,1,idx);
-    plot(Ts, sqrt(cauchyEst.moment_info.P(:,idx,idx)),c_std_color); hold on;
-    plot(Ts,-sqrt(cauchyEst.moment_info.P(:,idx,idx)),c_std_color); hold on;
-    plot(Ts, sqrt(Ps_kf(:,idx,idx)),k_std_color); hold on;
-    plot(Ts,-sqrt(Ps_kf(:,idx,idx)),k_std_color); hold on;
-    legend('Cauchy 1-Sig bound','','Kalman 1-Sig bound','','interpreter','latex');
-    grid on;
-end
-
-linkaxes(ax,'x');
+% figure;
+% for idx = 1:num_state
+%     ax(idx) = subplot(num_state,1,idx);
+%     plot(Ts, sqrt(cauchyEst.moment_info.P(:,idx,idx)),c_std_color); hold on;
+%     plot(Ts,-sqrt(cauchyEst.moment_info.P(:,idx,idx)),c_std_color); hold on;
+%     plot(Ts, sqrt(Ps_kf(:,idx,idx)),k_std_color); hold on;
+%     plot(Ts,-sqrt(Ps_kf(:,idx,idx)),k_std_color); hold on;
+%     legend('Cauchy 1-Sig bound','','Kalman 1-Sig bound','','interpreter','latex');
+%     grid on;
+% end
+% 
+% linkaxes(ax,'x');
 
 %%
 clear ax;
@@ -203,7 +208,7 @@ ylabel('Velocity [rad/s]','Interpreter','latex','FontSize',14);
 xlabel('Time [s]','Interpreter','latex','FontSize',14);
 
 
-sgtitle('Error and 1-sigma bound - Experiment','Interpreter','latex');
+sgtitle('Error and 1-sigma bound - Simulink','Interpreter','latex');
 
 linkaxes(ax,'x');
 

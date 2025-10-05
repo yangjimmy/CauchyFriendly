@@ -1,8 +1,9 @@
-function [xs_kf, Ps_kf] = propagate_kf_nl(x0_kf,P0_kf,zs,propagations, disc_taylor_order)
+function [xs_kf, Ps_kf] = propagate_kf_nl(x0_kf,P0_kf,zs,u,propagations, disc_taylor_order)
     arguments
         x0_kf;
         P0_kf;
         zs;
+        u;
         propagations = size(zs,1);
         disc_taylor_order = 2;
     end
@@ -35,7 +36,7 @@ function [xs_kf, Ps_kf] = propagate_kf_nl(x0_kf,P0_kf,zs,propagations, disc_tayl
     
         % Propagate covariance and state estimates
         P_kf = Phi_k * P_kf * Phi_k' + W_k;
-        x_kf = nonlin_transition_model(x_kf);
+        x_kf = nonlin_transition_model(x_kf,u(k));
         % [~,x_kf] = ode45(@nonlin_transition_model_ode45,[0, dt],x_kf);
         % x_kf = x_kf(end,:).';
     

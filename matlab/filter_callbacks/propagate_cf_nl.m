@@ -18,6 +18,10 @@ function cauchyEst = propagate_cf_nl(x0_kf,P0_kf,zs,scale_g2c,propagations,num_c
 
     beta = sqrt(W / dt) * scale_g2c;
     gamma = sqrt(V(1, 1)) * scale_g2c;
+    
+    beta = mp.beta;
+    gamma = mp.gamma;
+
     x0_ce = x0_kf;
     A0 = eye(num_states);
     p0 = sqrt(diag(P0_kf)) * scale_g2c;
